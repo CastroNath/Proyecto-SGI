@@ -1,24 +1,57 @@
-import mysql.connector
-import streamlit as st
-from Módulos.login import mostrar_registro
+import mysql.connector 
 
-# Verificar la conexión a la base de datos
-try:
-    conn = mysql.connector.connect(
-        host=st.secrets["mysql"]["host"],
-        port=st.secrets["mysql"]["port"],
-        user=st.secrets["mysql"]["user"],
-        password=st.secrets["mysql"]["password"],
-        database=st.secrets["mysql"]["database"],
-    )
-    conectado = conn.is_connected()
-    conn.close()
-except mysql.connector.Error as err:
-    conectado = False
-    st.error(f"Error al conectar con la base de datos: {err}")
+import streamlit as st 
 
-# Si hay conexión, mostrar el formulario de registro
-if conectado:
-    mostrar_registro()
-else:
-    st.error("No se pudo conectar a la base de datos.")
+st.title("Conexión con base de datos MySQL") 
+
+# Obtener las credenciales almacenadas en Streamlit Secrets 
+
+host = st.secrets["mysql"]["host"] 
+
+port = st.secrets["mysql"]["port"] 
+
+user = st.secrets["mysql"]["user"] 
+
+password = st.secrets["mysql"]["password"] 
+
+database = st.secrets["mysql"]["database"] 
+
+# Intentar establecer la conexión 
+
+try: 
+
+    conn = mysql.connector.connect( 
+
+        host=host, 
+
+        port=port, 
+
+        user=user, 
+
+        password=password, 
+
+        database=database 
+
+    ) 
+
+    # Verificar si la conexión fue exitosa 
+
+    if conn.is_connected(): 
+
+        st.success("Conexión exitosa a la base de datos MySQL.") 
+
+    else: 
+
+        st.error("No se pudo conectar a la base de datos.") 
+
+except mysql.connector.Error as err: 
+
+    # Mostrar el error si la conexión falla 
+
+    st.error(f"Error al conectar con la base de datos: {err}") 
+
+finally: 
+
+    if "conn" in locals() and conn.is_connected(): 
+
+        conn.close()
