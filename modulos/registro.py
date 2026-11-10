@@ -1,50 +1,82 @@
-import bcrypt
-import mysql.connector
 import streamlit as st
+from config.conexion import obtener_conexion
 
-ROLES = ["Administrador general", "Encargado de tienda", "Cajero"]
+def obtener_roles_y_tiendas():
+    conexion = obtener_conexion()
+    if conexion is None:
+        return [], []
+    cursor = None
+    try:
+        cursor = conexion.cursor(dictionary=True)
+        
+        # Consultar roles disponibles
+        cursor.execute("SELECT id_rol, Nombre FROM Rol")
+        roles = cursor.fetchall()
+        
+        # Consultar tiendas disponibles
+        cursor.execute("SELECT id_tienda, Nombre FROM Tienda")
+        tiendas = cursor.fetchall()
+        
+        return roles, tiendas
+    except Exception as e:
+        st.error(f"Error al cargar datos: {e}")
+        return [], []
+    finally:
+        if cursor: cursor.close()
+        if conexion: conexion.close()
 
+def registrar_usuario(id_rol, id_tienda, nombre, usuario, contrasena):
+    conexion = obtener_conexion()
+    if conexion is None:
+        return False
+    cursor = None
+    try:
+        cursor = conexion.cursor()
+        consulta = """
+            INSERT INTO Usuario (id_rol, id_tienda, Nombre, Usuario, Contrasena)
+            VALUES (%s, %s, %s, %s, %s)
+        """
+        cursor.execute(consulta, (id_rol, id_tienda, nombre, usuario, contrasena))
+        conexion.commit()
+        return True
+    except Exception as e:
+        st.error(f"Error al registrar: {e}")
+        return False
+    finally:
+        if cursor: cursor.close()
+        if conexion: conexion.close()
 
-def get_conn():
-    return mysql.connector.connect(
-        host=st.secrets["mysql"]["host"],
-        port=st.secrets["mysql"]["port"],
-        user=st.secrets["mysql"]["user"],
-        password=st.secrets["mysql"]["password"],
-        database=st.secrets["mysql"]["database"],
-    )
-
-
-def mostrar_registro():
-    st.subheader("Crear cuenta nueva")
-
-    with st.form("form_registro"):
-        usuario = st.text_input("Usuario")
-        pw1 = st.text_input("Contraseña", type="password")
-        pw2 = st.text_input("Confirmar contraseña", type="password")
-        rol = st.selectbox("Rol", ROLES)
-        enviar = st.form_submit_button("Crear cuenta")
-
-    if not enviar:
+def registro():
+    st.title("Crear una cuenta nueva")
+    
+    # Cargar los roles y tiendas reales de la BD
+    lista_roles, lista_tiendas = obtener_roles_y_tiendas()
+    
+    if not lista_roles or not lista_tiendas:
+        st.warning("⚠️ Para registrar usuarios, primero debes tener Roles y Tiendas creados en la base de datos.")
         return
 
-    if not usuario.strip() or not pw1:
-        st.error("Completa todos los campos.")
-    elif pw1 != pw2:
-        st.error("Las contraseñas no coinciden.")
-    else:
-        hashed = bcrypt.hashpw(pw1.encode(), bcrypt.gensalt()).decode()
-        conn = get_conn()
-        try:
-            cur = conn.cursor()
-            cur.execute(
-                "INSERT INTO usuarios_nuevos (usuario, contrasena, rol) "
-                "VALUES (%s, %s, %s)",
-                (usuario.strip(), hashed, rol),
+    with st.form("form_registro"):
+        nombre = st.text_input("Nombre Completo")
+        usuario = st.text_input("Nombre de Usuario")
+        contrasena = st.text_input("Contraseña", type="password")
+        
+        # selectbox que muestran el Nombre pero guardan el ID interno
+        rol_seleccionado = st.selectbox("Selecciona tu Rol", lista_roles, format_func=lambda x: x["Nombre"])
+        tienda_seleccionada = st.selectbox("Selecciona tu Tienda", lista_tiendas, format_func=lambda x: x["Nombre"])
+        
+        btn_registrar = st.form_submit_button("Registrarse")
+        
+    if btn_registrar:
+        if not nombre.strip() or not usuario.strip() or not contrasena.strip():
+            st.error("Por favor, llena todos los campos.")
+        else:
+            exito = registrar_usuario(
+                rol_seleccionado["id_rol"], 
+                tienda_seleccionada["id_tienda"], 
+                nombre.strip(), 
+                usuario.strip(), 
+                contrasena
             )
-            conn.commit()
-            st.success(f"Cuenta creada con el rol: {rol}")
-        except mysql.connector.IntegrityError:
-            st.error("Ese nombre de usuario ya existe.")
-        finally:
-            conn.close()
+            if exito:
+                st.success("¡Cuenta creada con éxito! Ya puedes iniciar sesión.")
