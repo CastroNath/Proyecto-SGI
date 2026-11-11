@@ -47,7 +47,7 @@ def registrar_usuario(id_rol, id_tienda, nombre, usuario, contrasena):
         if conexion: conexion.close()
 
 def mostrar_registro():
-    st.header("👑 Administración: Crear Cuenta de Usuario")
+    st.header("👑 Crear Cuenta de Usuario")
     st.write("Asigna un nuevo empleado operativo a su rol y tienda correspondiente.")
     
     lista_roles, lista_tiendas = obtener_roles_y_tiendas()
