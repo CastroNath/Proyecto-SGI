@@ -47,8 +47,8 @@ def registrar_usuario(id_rol, id_tienda, nombre, usuario, contrasena):
         if conexion: conexion.close()
 
 def mostrar_registro():
-    st.header("👑 Crear Cuenta de Usuario")
-    st.write("Asigna un nuevo empleado operativo a su rol y tienda correspondiente.")
+    st.header("👑 Crear cuenta de usuario")
+    st.write("Asigna un nuevo empleado a su rol y tienda correspondiente.")
     
     lista_roles, lista_tiendas = obtener_roles_y_tiendas()
     
@@ -60,14 +60,14 @@ def mostrar_registro():
         return
 
     with st.form("form_registro"):
-        nombre = st.text_input("Nombre Completo del Empleado")
-        usuario = st.text_input("Nombre de Usuario")
+        nombre = st.text_input("Nombre completo del empleado")
+        usuario = st.text_input("Nombre de usuario")
         contrasena = st.text_input("Contraseña", type="password")
         
         rol_seleccionado = st.selectbox("Asignar Rol", lista_roles, format_func=lambda x: x["Nombre"])
-        tienda_seleccionada = st.selectbox("Asignar Tienda / Sucursal", lista_tiendas, format_func=lambda x: x["Nombre"])
+        tienda_seleccionada = st.selectbox("Asignar Tienda", lista_tiendas, format_func=lambda x: x["Nombre"])
         
-        btn_registrar = st.form_submit_button("Guardar Usuario")
+        btn_registrar = st.form_submit_button("Guardar usuario")
         
     if btn_registrar:
         if not nombre.strip() or not usuario.strip() or not contrasena.strip():
