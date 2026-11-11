@@ -124,7 +124,7 @@ else:
                 st.session_state["vista_actual"] = "registra_info"
                 st.rerun()
         with f3:
-            st.markdown('<div class="tarjeta"><div class="emoji-grande">💸</div><div class="titulo-tarjeta">Compra y vende productos</div><div class="desc-tarjeta">Registra tus compras y ventas diarias</div></div>', unsafe_allow_html=True)
+            st.markdown('<div class="tarjeta"><div class="emoji-grande">💸</div><div class="titulo-tarjeta">Compra y venta de productos</div><div class="desc-tarjeta">Registra tus compras y ventas diarias</div></div>', unsafe_allow_html=True)
             if st.button("🛒 Comprar/Vender", key="btn_cv"):
                 st.session_state["vista_actual"] = "compra_venta"
                 st.rerun()
