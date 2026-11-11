@@ -46,8 +46,9 @@ def registrar_usuario(id_rol, id_tienda, nombre, usuario, contrasena):
         if cursor: cursor.close()
         if conexion: conexion.close()
 
-def registro():
-    st.title("Crear una cuenta nueva")
+def mostrar_registro():
+    st.header("👑 Administración: Crear Cuenta de Usuario")
+    st.write("Asigna un nuevo usuario a su rol y tienda correspondiente.")
     
     # Cargar los roles y tiendas reales de la BD
     lista_roles, lista_tiendas = obtener_roles_y_tiendas()
@@ -57,15 +58,15 @@ def registro():
         return
 
     with st.form("form_registro"):
-        nombre = st.text_input("Nombre Completo")
+        nombre = st.text_input("Nombre Completo del Empleado")
         usuario = st.text_input("Nombre de Usuario")
         contrasena = st.text_input("Contraseña", type="password")
         
         # selectbox que muestran el Nombre pero guardan el ID interno
-        rol_seleccionado = st.selectbox("Selecciona tu Rol", lista_roles, format_func=lambda x: x["Nombre"])
-        tienda_seleccionada = st.selectbox("Selecciona tu Tienda", lista_tiendas, format_func=lambda x: x["Nombre"])
+        rol_seleccionado = st.selectbox("Asignar Rol", lista_roles, format_func=lambda x: x["Nombre"])
+        tienda_seleccionada = st.selectbox("Asignar Tienda / Sucursal", lista_tiendas, format_func=lambda x: x["Nombre"])
         
-        btn_registrar = st.form_submit_button("Registrarse")
+        btn_registrar = st.form_submit_button("Guardar Usuario")
         
     if btn_registrar:
         if not nombre.strip() or not usuario.strip() or not contrasena.strip():
@@ -79,4 +80,4 @@ def registro():
                 contrasena
             )
             if exito:
-                st.success("¡Cuenta creada con éxito! Ya puedes iniciar sesión.")
+                st.success(f"✅ Usuario '{usuario.strip()}' creado y asignado a {tienda_seleccionada['Nombre']}.")
