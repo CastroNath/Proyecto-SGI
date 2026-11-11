@@ -29,7 +29,7 @@ def verificar_usuario(usuario, contrasena):
             conexion.close()
 
 def login():
-    st.title("Inicio de sesión - Sistema de Ventas")
+    st.title("Red Cooperativa de Mujeres de Occidente")
     
     # Formulario de credenciales
     usuario_input = st.text_input("Usuario")
