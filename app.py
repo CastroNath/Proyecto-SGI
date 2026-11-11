@@ -3,7 +3,7 @@ from modulos.login import login
 from modulos.categorias import mostrar_categorias
 from modulos.productos import mostrar_productos
 from modulos.proveedores import mostrar_proveedores
-from modulos.registro import mostrar_registro  # Ahora vive dentro de Administración
+from modulos.registro import mostrar_registro
 
 # Configuración de página ancha para que luzcan las tarjetas en columnas
 st.set_page_config(page_title="Red Cooperativa de Mujeres de Occidente", layout="wide")
@@ -57,7 +57,7 @@ if "sesion_iniciada" not in st.session_state:
 if "vista_actual" not in st.session_state:
     st.session_state["vista_actual"] = "menu_principal"
 
-# Si no ha iniciado sesión, mostrar únicamente el Login (Sin opción de registro público)
+# Si no ha iniciado sesión, mostrar únicamente el Login
 if not st.session_state["sesion_iniciada"]:
     login()
 else:
@@ -66,7 +66,7 @@ else:
     with col_info1:
         st.caption(f"👤 Usuario: **{st.session_state['nombre_completo']}** | 🏪 ID Tienda asignada: **{st.session_state['id_tienda']}** | 🔑 ID Rol: **{st.session_state['id_rol']}**")
     
-    # --- VISTA 1: MENÚ PRINCIPAL (Como tu primera foto) ---
+    # --- VISTA 1: MENÚ PRINCIPAL ---
     if st.session_state["vista_actual"] == "menu_principal":
         st.markdown("<h2 style='text-align: center; margin-bottom: 30px;'>Red Cooperativa de Mujeres de Occidente</h2>", unsafe_allow_html=True)
         
@@ -93,7 +93,6 @@ else:
         with f1:
             st.markdown('<div class="tarjeta"><div class="emoji-grande">👑</div><div class="titulo-tarjeta">Administración</div><div class="desc-tarjeta">Gestionar tiendas y usuarios</div></div>', unsafe_allow_html=True)
             if st.button("⚙️ Gestionar", key="btn_admin"):
-                # Validación de rol: Supongamos que id_rol == 1 es Administrador General
                 if st.session_state["id_rol"] == 1:
                     st.session_state["vista_actual"] = "administracion"
                     st.rerun()
@@ -114,7 +113,7 @@ else:
             if st.button("📑 Ver reportes", key="btn_rep"):
                 st.info("Módulo en construcción (Próxima fase).")
 
-    # --- VISTA 2: SUBMENÚ REGISTRA INFORMACIÓN (Como tu segunda foto) ---
+    # --- VISTA 2: SUBMENÚ REGISTRA INFORMACIÓN ---
     elif st.session_state["vista_actual"] == "registra_info":
         st.markdown("<h3 style='text-align: center; margin-bottom: 25px;'>✏️ Registra información</h3>", unsafe_allow_html=True)
         
@@ -137,7 +136,7 @@ else:
 
     # --- VISTAS DE FORMULARIOS ESPECÍFICOS ---
     elif st.session_state["vista_actual"] == "administracion":
-        mostrar_registro() # Aquí el Admin crea cuentas y asigna tiendas
+        mostrar_registro()
     elif st.session_state["vista_actual"] == "form_producto":
         mostrar_productos()
     elif st.session_state["vista_actual"] == "form_proveedor":
@@ -147,7 +146,7 @@ else:
     elif st.session_state["vista_actual"] in ["inventario", "compra_venta"]:
         st.warning("🚧 Aún nos falta crear las tablas de Compras, Ventas e Inventario en phpMyAdmin para habilitar esta pantalla.")
 
-    # --- BOTONES INFERIORES DE NAVEGACIÓN (Igual a las fotos) ---
+    # --- BOTONES INFERIORES DE NAVEGACIÓN ---
     st.markdown("<br>", unsafe_allow_html=True)
     if st.session_state["vista_actual"] != "menu_principal":
         if st.button("⬅️ Volver al menú principal"):
