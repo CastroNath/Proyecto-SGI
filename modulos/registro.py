@@ -64,8 +64,8 @@ def mostrar_registro():
         usuario = st.text_input("Nombre de usuario")
         contrasena = st.text_input("Contraseña", type="password")
         
-        rol_seleccionado = st.selectbox("Asignar Rol", lista_roles, format_func=lambda x: x["Nombre"])
-        tienda_seleccionada = st.selectbox("Asignar Tienda", lista_tiendas, format_func=lambda x: x["Nombre"])
+        rol_seleccionado = st.selectbox("Asignar rol", lista_roles, format_func=lambda x: x["Nombre"])
+        tienda_seleccionada = st.selectbox("Asignar tienda", lista_tiendas, format_func=lambda x: x["Nombre"])
         
         btn_registrar = st.form_submit_button("Guardar usuario")
         
