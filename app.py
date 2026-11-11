@@ -8,9 +8,18 @@ from modulos.registro import mostrar_registro
 # Configuración de página ancha para que luzcan las tarjetas en columnas
 st.set_page_config(page_title="Red Cooperativa de Mujeres de Occidente", layout="wide")
 
-# Estilos CSS personalizados para imitar el diseño de tarjetas y botones azul oscuro
+# Estilos CSS personalizados con animación de rebote en los emojis
 st.markdown("""
     <style>
+    @keyframes flotar {
+        0%, 100% { transform: translateY(0px); }
+        50% { transform: translateY(-5px); }
+    }
+    @keyframes rebotar {
+        0%, 100% { transform: scale(1) translateY(0); }
+        40% { transform: scale(1.2) translateY(-10px); }
+        60% { transform: scale(1.1) translateY(-4px); }
+    }
     .tarjeta {
         background-color: #f8f9fa;
         border: 1px solid #e0e0e0;
@@ -19,10 +28,21 @@ st.markdown("""
         text-align: center;
         margin-bottom: 10px;
         box-shadow: 0 2px 4px rgba(0,0,0,0.03);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .tarjeta:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 6px 12px rgba(0,0,0,0.08);
+        border-color: #13294B;
     }
     .emoji-grande {
         font-size: 42px;
         margin-bottom: 10px;
+        display: inline-block;
+        animation: flotar 3s ease-in-out infinite;
+    }
+    .tarjeta:hover .emoji-grande {
+        animation: rebotar 0.6s ease;
     }
     .titulo-tarjeta {
         font-size: 18px;
