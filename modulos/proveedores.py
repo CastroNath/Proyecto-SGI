@@ -1,104 +1,102 @@
-import streamlit as st
-import streamlit.components.v1 as components
+ import streamlit as st
 from config.conexion import obtener_conexion
 
-def formatear_dui_nit(valor, tipo_doc):
+# Funciones automáticas que acomodan los guiones en pantalla al escribir
+def auto_formato_dui():
+    raw = "".join(filter(str.isdigit, st.session_state.get("input_dui", "")))[:9]
+    if len(raw) > 8:
+        st.session_state["input_dui"] = f"{raw[:8]}-{raw[8:]}"
+    else:
+        st.session_state["input_dui"] = raw
+
+def auto_formato_nit():
+    raw = "".join(filter(str.isdigit, st.session_state.get("input_nit", "")))[:14]
+    if len(raw) > 13:
+        st.session_state["input_nit"] = f"{raw[:4]}-{raw[4:10]}-{raw[10:13]}-{raw[13:]}"
+    elif len(raw) > 10:
+        st.session_state["input_nit"] = f"{raw[:4]}-{raw[4:10]}-{raw[10:]}"
+    elif len(raw) > 4:
+        st.session_state["input_nit"] = f"{raw[:4]}-{raw[4:]}"
+    else:
+        st.session_state["input_nit"] = raw
+
+def auto_formato_tel():
+    raw = "".join(filter(str.isdigit, st.session_state.get("input_tel", "")))[:8]
+    if len(raw) > 4:
+        st.session_state["input_tel"] = f"{raw[:4]}-{raw[4:]}"
+    else:
+        st.session_state["input_tel"] = raw
+
+# Funciones de validación final antes de guardar en MySQL
+def validar_dui_nit(valor, tipo_doc):
     solo_numeros = "".join(filter(str.isdigit, valor))
-    
     if tipo_doc == "Ninguno" or len(solo_numeros) == 0:
         return "", True
-    elif tipo_doc == "DUI":
-        if len(solo_numeros) == 9:
-            return f"{solo_numeros[:8]}-{solo_numeros[8:]}", True
-        return valor, False
-    elif tipo_doc == "NIT":
-        if len(solo_numeros) == 14:
-            return f"{solo_numeros[:4]}-{solo_numeros[4:10]}-{solo_numeros[10:13]}-{solo_numeros[13:]}", True
-        return valor, False
+    elif tipo_doc == "DUI" and len(solo_numeros) == 9:
+        return f"{solo_numeros[:8]}-{solo_numeros[8:]}", True
+    elif tipo_doc == "NIT" and len(solo_numeros) == 14:
+        return f"{solo_numeros[:4]}-{solo_numeros[4:10]}-{solo_numeros[10:13]}-{solo_numeros[13:]}", True
     return valor, False
 
-def formatear_telefono(valor):
+def validar_telefono(valor):
     solo_numeros = "".join(filter(str.isdigit, valor))
-    
     if len(solo_numeros) == 0:
         return "", True
     elif len(solo_numeros) == 8:
         return f"{solo_numeros[:4]}-{solo_numeros[4:]}", True
-    else:
-        return valor, False
+    return valor, False
 
 def mostrar_proveedores():
     st.header("🚚 Gestión de Proveedores")
     
-    nombre = st.text_input("Nombre o Razón Social *")
+    nombre = st.text_input("Nombre o Razón Social")
     tipo = st.selectbox("Tipo de Proveedor", ["Persona Natural", "Empresa", "Cooperativa", "Otro"])
     
-    # Pestaña selectora para evitar que ingresen ambos documentos y ajustar el límite exacto
     tipo_doc = st.radio(
-        "Documento de Identificación (Opcional):",
+        "Documento de Identificación",
         ["Ninguno", "DUI", "NIT"],
         horizontal=True
     )
     
     dui_nit_raw = ""
     if tipo_doc == "DUI":
-        dui_nit_raw = st.text_input("Número de DUI (9 dígitos)", max_chars=10, placeholder="00000000-0")
+        dui_nit_raw = st.text_input(
+            "Número de DUI",
+            max_chars=10,
+            placeholder="00000000-0",
+            key="input_dui",
+            on_change=auto_formato_dui
+        )
     elif tipo_doc == "NIT":
-        dui_nit_raw = st.text_input("Número de NIT (14 dígitos)", max_chars=17, placeholder="0000-000000-000-0")
+        dui_nit_raw = st.text_input(
+            "Número de NIT",
+            max_chars=17,
+            placeholder="0000-000000-000-0",
+            key="input_nit",
+            on_change=auto_formato_nit
+        )
         
-    telefono_raw = st.text_input("Teléfono (8 dígitos - Opcional)", max_chars=9, placeholder="0000-0000")
-    
-    # Script en vivo para poner los guiones automáticamente mientras el usuario teclea
-    components.html("""
-        <script>
-        const doc = window.parent.document;
-        setTimeout(() => {
-            const inputs = doc.querySelectorAll('input[type="text"]');
-            inputs.forEach(input => {
-                if (input.dataset.mascaraActiva) return;
-                input.dataset.mascaraActiva = "true";
-                
-                input.addEventListener('input', function(e) {
-                    const max = this.getAttribute('maxlength');
-                    let val = this.value.replace(/\\D/g, '');
-                    
-                    if (max === '10') { // Máscara DUI: 00000000-0
-                        if (val.length > 8) val = val.slice(0,8) + '-' + val.slice(8,9);
-                    } else if (max === '17') { // Máscara NIT: 0000-000000-000-0
-                        if (val.length > 13) val = val.slice(0,4) + '-' + val.slice(4,10) + '-' + val.slice(10,13) + '-' + val.slice(13,14);
-                        else if (val.length > 10) val = val.slice(0,4) + '-' + val.slice(4,10) + '-' + val.slice(10,13);
-                        else if (val.length > 4) val = val.slice(0,4) + '-' + val.slice(4,10);
-                    } else if (max === '9') { // Máscara Teléfono: 0000-0000
-                        if (val.length > 4) val = val.slice(0,4) + '-' + val.slice(4,8);
-                    }
-                    
-                    if (this.value !== val) {
-                        const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-                        nativeSetter.call(this, val);
-                        this.dispatchEvent(new Event('input', { bubbles: true }));
-                    }
-                });
-            });
-        }, 300);
-        </script>
-    """, height=0)
+    telefono_raw = st.text_input(
+        "Teléfono",
+        max_chars=9,
+        placeholder="0000-0000",
+        key="input_tel",
+        on_change=auto_formato_tel
+    )
 
     if st.button("Guardar Proveedor"):
         if not nombre.strip():
             st.warning("⚠️ El nombre del proveedor es obligatorio.")
             return
             
-        dui_nit_formateado, doc_valido = formatear_dui_nit(dui_nit_raw, tipo_doc)
-        tel_formateado, tel_valido = formatear_telefono(telefono_raw)
+        dui_nit_formateado, doc_valido = validar_dui_nit(dui_nit_raw, tipo_doc)
+        tel_formateado, tel_valido = validar_telefono(telefono_raw)
         
         if not doc_valido:
-            if tipo_doc == "DUI":
-                st.error("❌ El DUI debe tener exactamente 9 dígitos.")
-            else:
-                st.error("❌ El NIT debe tener exactamente 14 dígitos.")
+            st.error(f"❌ El {tipo_doc} ingresado está incompleto.")
             return
         if not tel_valido:
-            st.error("❌ El número de teléfono debe tener exactamente 8 dígitos.")
+            st.error("❌ El número de teléfono debe tener 8 dígitos.")
             return
 
         conexion = obtener_conexion()
@@ -116,7 +114,7 @@ def mostrar_proveedores():
                     tel_formateado if tel_formateado else None
                 ))
                 conexion.commit()
-                st.success(f"✅ Proveedor '{nombre.strip()}' registrado correctamente (Doc: {dui_nit_formateado or 'N/A'}, Tel: {tel_formateado or 'N/A'}).")
+                st.success(f"✅ Proveedor '{nombre.strip()}' registrado correctamente.")
             except Exception as e:
                 st.error(f"Error al registrar proveedor: {e}")
             finally:
