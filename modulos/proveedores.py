@@ -1,7 +1,6 @@
- import streamlit as st
+import streamlit as st
 from config.conexion import obtener_conexion
 
-# Funciones automáticas que acomodan los guiones en pantalla al escribir
 def auto_formato_dui():
     raw = "".join(filter(str.isdigit, st.session_state.get("input_dui", "")))[:9]
     if len(raw) > 8:
@@ -27,7 +26,6 @@ def auto_formato_tel():
     else:
         st.session_state["input_tel"] = raw
 
-# Funciones de validación final antes de guardar en MySQL
 def validar_dui_nit(valor, tipo_doc):
     solo_numeros = "".join(filter(str.isdigit, valor))
     if tipo_doc == "Ninguno" or len(solo_numeros) == 0:
