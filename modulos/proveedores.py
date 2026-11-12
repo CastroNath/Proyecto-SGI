@@ -2,17 +2,16 @@ import streamlit as st
 from config.conexion import obtener_conexion
 
 def formatear_dui_nit(valor):
-    # Extrae solo los números ingresados por el usuario
     solo_numeros = "".join(filter(str.isdigit, valor))
     
     if len(solo_numeros) == 0:
-        return "", True  # Es válido porque el documento es opcional
+        return "", True
     elif len(solo_numeros) == 9:
-        # Formato DUI: 00000000-0 (10 caracteres)
-        return f"{solo_numeros[:8]}-{solo_numeros[8]}", True
+        # Formato DUI: 00000000-0
+        return f"{solo_numeros[:8]}-{solo_numeros[8:]}", True
     elif len(solo_numeros) == 14:
-        # Formato NIT: 0000-000000-000-0 (17 caracteres)
-        return f"{solo_numeros[:4]}-{solo_numeros[4:10]}-{solo_numeros[10:13]}-{solo_numeros[13]}", True
+        # Formato NIT: 0000-000000-000-0
+        return f"{solo_numeros[:4]}-{solo_numeros[4:10]}-{solo_numeros[10:13]}-{solo_numeros[13:]}", True
     else:
         return valor, False
 
@@ -20,9 +19,9 @@ def formatear_telefono(valor):
     solo_numeros = "".join(filter(str.isdigit, valor))
     
     if len(solo_numeros) == 0:
-        return "", True  # Opcional
+        return "", True
     elif len(solo_numeros) == 8:
-        # Formato Teléfono: 0000-0000 (9 caracteres)
+        # Formato Teléfono: 0000-0000
         return f"{solo_numeros[:4]}-{solo_numeros[4:]}", True
     else:
         return valor, False
@@ -61,7 +60,6 @@ def mostrar_proveedores():
                     INSERT INTO Proveedor (Nombre, Tipo, DUI_NIT, Telefono)
                     VALUES (%s, %s, %s, %s)
                 """
-                # Si quedan vacíos se guardan como None (NULL en MySQL)
                 cursor.execute(consulta, (
                     nombre.strip(),
                     tipo,
@@ -69,7 +67,7 @@ def mostrar_proveedores():
                     tel_formateado if tel_formateado else None
                 ))
                 conexion.commit()
-                st.success(f"✅ Proveedor '{nombre.strip()}' registrado correctamente.")
+                st.success(f"✅ Proveedor '{nombre.strip()}' registrado correctamente (Doc: {dui_nit_formateado or 'N/A'}, Tel: {tel_formateado or 'N/A'}).")
             except Exception as e:
                 st.error(f"Error al registrar proveedor: {e}")
             finally:
