@@ -3,9 +3,10 @@ from modulos.login import login
 from modulos.categorias import mostrar_categorias
 from modulos.productos import mostrar_productos
 from modulos.proveedores import mostrar_proveedores
+from modulos.clientes import mostrar_clientes
 from modulos.registro import mostrar_registro
 
-# Configuración de página ancha para que luzcan las tarjetas en columnas
+# Configuración de página ancha
 st.set_page_config(page_title="Red Cooperativa de Mujeres de Occidente", layout="wide")
 
 # Estilos CSS personalizados con animación de rebote en los emojis
@@ -86,71 +87,68 @@ else:
     with col_info1:
         st.caption(f"👤 Usuario: **{st.session_state['nombre_completo']}** | 🏪 ID Tienda asignada: **{st.session_state['id_tienda']}** | 🔑 ID Rol: **{st.session_state['id_rol']}**")
     
-    # --- VISTA 1: MENÚ PRINCIPAL ---
+    # --- VISTA 1: MENÚ PRINCIPAL (5 módulos alineados al DFD) ---
     if st.session_state["vista_actual"] == "menu_principal":
         st.markdown("<h2 style='text-align: center; margin-bottom: 30px;'>Red Cooperativa de Mujeres de Occidente</h2>", unsafe_allow_html=True)
         
         # Primera fila de 3 tarjetas
         c1, c2, c3 = st.columns(3)
         with c1:
-            st.markdown('<div class="tarjeta"><div class="emoji-grande">📦</div><div class="titulo-tarjeta">Inventario Global</div><div class="desc-tarjeta">Ver inventario de las tiendas</div></div>', unsafe_allow_html=True)
+            st.markdown('<div class="tarjeta"><div class="emoji-grande">📦</div><div class="titulo-tarjeta">Gestión de Inventarios</div><div class="desc-tarjeta">Existencias, lotes y stock mínimo por tienda</div></div>', unsafe_allow_html=True)
             if st.button("📋 Ver inventario", key="btn_inv"):
                 st.session_state["vista_actual"] = "inventario"
                 st.rerun()
         with c2:
-            st.markdown('<div class="tarjeta"><div class="emoji-grande">⚖️</div><div class="titulo-tarjeta">Comparativa de Costos</div><div class="desc-tarjeta">Comparar precios unitarios entre tiendas</div></div>', unsafe_allow_html=True)
-            if st.button("💲 Ver comparativa", key="btn_comp"):
-                st.info("Módulo en construcción (Próxima fase).")
+            st.markdown('<div class="tarjeta"><div class="emoji-grande">✏️</div><div class="titulo-tarjeta">Catálogos y Registros</div><div class="desc-tarjeta">Productos, clientes, proveedores y categorías</div></div>', unsafe_allow_html=True)
+            if st.button("📝 Gestionar catálogos", key="btn_reg_info"):
+                st.session_state["vista_actual"] = "registra_info"
+                st.rerun()
         with c3:
-            st.markdown('<div class="tarjeta"><div class="emoji-grande">📈</div><div class="titulo-tarjeta">Pronósticos y Reorden</div><div class="desc-tarjeta">Rotación, cobertura y compras sugeridas</div></div>', unsafe_allow_html=True)
-            if st.button("📊 Ver pronósticos", key="btn_pron"):
-                st.info("Módulo en construcción (Próxima fase).")
+            st.markdown('<div class="tarjeta"><div class="emoji-grande">💸</div><div class="titulo-tarjeta">Compras y Ventas</div><div class="desc-tarjeta">Registra entradas de compra y salidas de venta</div></div>', unsafe_allow_html=True)
+            if st.button("🛒 Comprar / Vender", key="btn_cv"):
+                st.session_state["vista_actual"] = "compra_venta"
+                st.rerun()
 
         st.write("") # Espacio entre filas
 
-        # Segunda fila de 4 tarjetas
-        f1, f2, f3, f4 = st.columns(4)
+        # Segunda fila centrada de 2 tarjetas
+        espacio_izq, f1, f2, espacio_der = st.columns([0.5, 1, 1, 0.5])
         with f1:
-            st.markdown('<div class="tarjeta"><div class="emoji-grande">👑</div><div class="titulo-tarjeta">Administración</div><div class="desc-tarjeta">Gestionar tiendas y usuarios</div></div>', unsafe_allow_html=True)
+            st.markdown('<div class="tarjeta"><div class="emoji-grande">👑</div><div class="titulo-tarjeta">Administración</div><div class="desc-tarjeta">Gestionar tiendas y cuentas de usuario</div></div>', unsafe_allow_html=True)
             if st.button("⚙️ Gestionar", key="btn_admin"):
                 if st.session_state["id_rol"] == 1:
                     st.session_state["vista_actual"] = "administracion"
                     st.rerun()
                 else:
-                    st.error("⛔ Acceso denegado. Solo el Administrador General puede crear cuentas o tiendas.")
+                    st.error("⛔ Acceso denegado. Solo el Administrador General puede gestionar cuentas.")
         with f2:
-            st.markdown('<div class="tarjeta"><div class="emoji-grande">✏️</div><div class="titulo-tarjeta">Registra información</div><div class="desc-tarjeta">Registra productos, proveedores y categorías</div></div>', unsafe_allow_html=True)
-            if st.button("📝 Ingresar información", key="btn_reg_info"):
-                st.session_state["vista_actual"] = "registra_info"
-                st.rerun()
-        with f3:
-            st.markdown('<div class="tarjeta"><div class="emoji-grande">💸</div><div class="titulo-tarjeta">Compra y venta de productos</div><div class="desc-tarjeta">Registra tus compras y ventas diarias</div></div>', unsafe_allow_html=True)
-            if st.button("🛒 Comprar/Vender", key="btn_cv"):
-                st.session_state["vista_actual"] = "compra_venta"
-                st.rerun()
-        with f4:
-            st.markdown('<div class="tarjeta"><div class="emoji-grande">📊</div><div class="titulo-tarjeta">Reportes Globales</div><div class="desc-tarjeta">Reportes de ventas de las tiendas</div></div>', unsafe_allow_html=True)
+            st.markdown('<div class="tarjeta"><div class="emoji-grande">📊</div><div class="titulo-tarjeta">Reportes y Consultas</div><div class="desc-tarjeta">Movimientos y reportes por tienda o globales</div></div>', unsafe_allow_html=True)
             if st.button("📑 Ver reportes", key="btn_rep"):
                 st.info("Módulo en construcción (Próxima fase).")
 
-    # --- VISTA 2: SUBMENÚ REGISTRA INFORMACIÓN ---
+    # --- VISTA 2: SUBMENÚ CATÁLOGOS Y REGISTROS (4 tarjetas: Producto, Cliente, Proveedor, Categoría) ---
     elif st.session_state["vista_actual"] == "registra_info":
-        st.markdown("<h3 style='text-align: center; margin-bottom: 25px;'>✏️ Registra información</h3>", unsafe_allow_html=True)
+        st.markdown("<h3 style='text-align: center; margin-bottom: 25px;'>✏️ Catálogos y Registros</h3>", unsafe_allow_html=True)
         
-        s1, s2, s3 = st.columns(3)
+        s1, s2, s3, s4 = st.columns(4)
         with s1:
-            st.markdown('<div class="tarjeta"><div class="emoji-grande">📦</div><div class="titulo-tarjeta">Nuevo Producto</div><div class="desc-tarjeta">Registra productos en el catálogo</div></div>', unsafe_allow_html=True)
-            if st.button("Agregar", key="sub_prod"):
+            st.markdown('<div class="tarjeta"><div class="emoji-grande">📦</div><div class="titulo-tarjeta">Productos</div><div class="desc-tarjeta">Administra el catálogo de productos</div></div>', unsafe_allow_html=True)
+            if st.button("Agregar Producto", key="sub_prod"):
                 st.session_state["vista_actual"] = "form_producto"
                 st.rerun()
         with s2:
-            st.markdown('<div class="tarjeta"><div class="emoji-grande">🚚</div><div class="titulo-tarjeta">Nuevo Proveedor</div><div class="desc-tarjeta">Registra proveedores de la tienda</div></div>', unsafe_allow_html=True)
-            if st.button("Registrar", key="sub_prov"):
-                st.session_state["vista_actual"] = "form_proveedor"
+            st.markdown('<div class="tarjeta"><div class="emoji-grande">🤝</div><div class="titulo-tarjeta">Clientes</div><div class="desc-tarjeta">Registra clientes de la tienda</div></div>', unsafe_allow_html=True)
+            if st.button("Agregar Cliente", key="sub_cli"):
+                st.session_state["vista_actual"] = "form_cliente"
                 st.rerun()
         with s3:
-            st.markdown('<div class="tarjeta"><div class="emoji-grande">📁</div><div class="titulo-tarjeta">Gestionar Categorías</div><div class="desc-tarjeta">Administra categorías de productos</div></div>', unsafe_allow_html=True)
-            if st.button("Gestionar", key="sub_cat"):
+            st.markdown('<div class="tarjeta"><div class="emoji-grande">🚚</div><div class="titulo-tarjeta">Proveedores</div><div class="desc-tarjeta">Registra proveedores de la tienda</div></div>', unsafe_allow_html=True)
+            if st.button("Agregar Proveedor", key="sub_prov"):
+                st.session_state["vista_actual"] = "form_proveedor"
+                st.rerun()
+        with s4:
+            st.markdown('<div class="tarjeta"><div class="emoji-grande">📁</div><div class="titulo-tarjeta">Categorías</div><div class="desc-tarjeta">Clasificación común de productos</div></div>', unsafe_allow_html=True)
+            if st.button("Gestionar Categorías", key="sub_cat"):
                 st.session_state["vista_actual"] = "form_categoria"
                 st.rerun()
 
@@ -159,6 +157,8 @@ else:
         mostrar_registro()
     elif st.session_state["vista_actual"] == "form_producto":
         mostrar_productos()
+    elif st.session_state["vista_actual"] == "form_cliente":
+        mostrar_clientes()
     elif st.session_state["vista_actual"] == "form_proveedor":
         mostrar_proveedores()
     elif st.session_state["vista_actual"] == "form_categoria":
