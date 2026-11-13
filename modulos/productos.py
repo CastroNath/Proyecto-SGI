@@ -14,7 +14,7 @@ def obtener_categorias():
         conexion.close()
 
 def mostrar_productos():
-    st.header("Gestión de Productos")
+    st.header("Gestión de productos")
     
     # Regla de negocio: El Centro de Distribución (ej. id_tienda == 1 o según tu BD) no crea productos nuevos
     categorias = obtener_categorias()
@@ -23,11 +23,11 @@ def mostrar_productos():
         return
 
     with st.form("form_producto"):
-        nombre = st.text_input("Nombre del Producto")
+        nombre = st.text_input("Nombre del producto")
         categoria_sel = st.selectbox("Categoría", categorias, format_func=lambda x: x["Nombre"])
         unidad = st.text_input("Unidad de medida (ej. Libra, Unidad, Litro)")
         codigo_barras = st.text_input("Código de barras")
-        guardar = st.form_submit_button("Guardar Producto")
+        guardar = st.form_submit_button("Guardar producto")
         
     if guardar:
         if not nombre.strip():
