@@ -63,9 +63,11 @@ def mostrar_productos():
 
     nombre = st.text_input("Nombre del Producto", key="input_nombre_prod")
     categoria_sel = st.selectbox("Categoría", categorias, format_func=lambda x: x["Nombre"])
+    
+    # Menú desplegable cerrado para evitar errores de escritura
     unidad = st.selectbox(
         "Unidad de Medida",
-        ["Unidad", "Libra", "Kilogramo", "Litro", "Mililitro", "Caja", "Paquete", "Saco"],
+        ["Unidad", "Libra", "Kilogramo", "Gramo", "Onza", "Litro", "Mililitro", "Caja", "Paquete", "Saco", "Docena"],
         key="input_unidad_prod"
     )
     codigo_barras = st.text_input("Código de Barras (Opcional)", key="input_cod_prod")
