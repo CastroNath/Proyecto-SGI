@@ -50,9 +50,15 @@ def mostrar_proveedores():
     nombre = st.text_input("Nombre o Razón Social")
     tipo = st.selectbox("Tipo de Proveedor", ["Persona Natural", "Empresa", "Cooperativa", "Otro"])
     
+    # Regla de negocio: Solo las personas naturales tienen DUI
+    if tipo == "Persona Natural":
+        opciones_doc = ["Ninguno", "DUI", "NIT"]
+    else:
+        opciones_doc = ["Ninguno", "NIT"]
+        
     tipo_doc = st.radio(
         "Documento de Identificación",
-        ["Ninguno", "DUI", "NIT"],
+        opciones_doc,
         horizontal=True
     )
     
@@ -74,9 +80,10 @@ def mostrar_proveedores():
             on_change=auto_formato_nit
         )
         
+    # max_chars=8 evita que escriban un noveno dígito antes de poner el guion
     telefono_raw = st.text_input(
         "Teléfono",
-        max_chars=9,
+        max_chars=8 if "-" not in st.session_state.get("input_tel", "") else 9,
         placeholder="0000-0000",
         key="input_tel",
         on_change=auto_formato_tel
