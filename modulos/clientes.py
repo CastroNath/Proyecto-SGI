@@ -7,7 +7,7 @@ def mostrar_clientes():
     # 1. Limpiar campos antes de dibujarlos si se activó la bandera
     if st.session_state.get("limpiar_campos_cli", False):
         st.session_state["input_nombre_cli"] = ""
-        st.session_state["input_tipo_cli"] = "Consumidor Final"
+        st.session_state["input_tipo_cli"] = "Publico general"
         st.session_state["limpiar_campos_cli"] = False
 
     # 2. Mostrar mensaje de éxito si se acaba de guardar un cliente
@@ -19,13 +19,13 @@ def mostrar_clientes():
     if "input_nombre_cli" not in st.session_state:
         st.session_state["input_nombre_cli"] = ""
     if "input_tipo_cli" not in st.session_state:
-        st.session_state["input_tipo_cli"] = "Consumidor Final"
+        st.session_state["input_tipo_cli"] = "Publico general"
 
     # 4. Formulario
     nombre = st.text_input("Nombre del Cliente", key="input_nombre_cli")
     tipo = st.selectbox(
         "Tipo de Cliente",
-        ["Consumidor Final", "Mayorista", "Tienda Afiliada", "Empresa / Institución"],
+        ["Publico general", "Tienda"],
         key="input_tipo_cli"
     )
 
