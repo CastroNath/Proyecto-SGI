@@ -1,4 +1,5 @@
 import streamlit as st
+import mysql.connector
 from config.conexion import obtener_conexion
 
 def limpiar_y_formatear_dui():
@@ -113,7 +114,7 @@ def mostrar_proveedores():
         on_change=limpiar_y_formatear_tel
     )
 
-    # 5. Guardar en la base de datos
+    # 5. Guardar en la base de datos con validación de duplicados
     if st.button("Guardar Proveedor"):
         if not nombre.strip():
             st.warning("⚠️ El nombre del proveedor es obligatorio.")
@@ -151,10 +152,16 @@ def mostrar_proveedores():
                 cursor.execute(consulta, (nombre.strip(), tipo, doc_final, tel_final))
                 conexion.commit()
                 
-                # Activar la bandera para que se limpien al inicio del siguiente ciclo
                 st.session_state["msg_exito_prov"] = f"✅ Proveedor '{nombre.strip()}' registrado correctamente."
                 st.session_state["limpiar_campos_prov"] = True
                 st.rerun()
+            except mysql.connector.IntegrityError as err:
+                if "DUI_NIT" in str(err):
+                    st.error(f"❌ El {tipo_doc} ingresado ya pertenece a otro proveedor registrado.")
+                elif "Telefono" in str(err):
+                    st.error("❌ Ese número de teléfono ya pertenece a otro proveedor registrado.")
+                else:
+                    st.error("❌ Ya existe un proveedor registrado con esos datos.")
             except Exception as e:
                 st.error(f"Error al registrar proveedor: {e}")
             finally:
