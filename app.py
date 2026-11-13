@@ -126,7 +126,7 @@ else:
             if st.button("📑 Ver reportes", key="btn_rep"):
                 st.info("Módulo en construcción (Próxima fase).")
 
-    # --- VISTA 2: SUBMENÚ CATÁLOGOS Y REGISTROS (4 tarjetas: Producto, Cliente, Proveedor, Categoría) ---
+    # --- VISTA 2: SUBMENÚ CATÁLOGOS Y REGISTROS ---
     elif st.session_state["vista_actual"] == "registra_info":
         st.markdown("<h3 style='text-align: center; margin-bottom: 25px;'>✏️ Catálogos y Registros</h3>", unsafe_allow_html=True)
         
@@ -166,10 +166,22 @@ else:
     elif st.session_state["vista_actual"] in ["inventario", "compra_venta"]:
         st.warning("🚧 Aún nos falta crear las tablas de Compras, Ventas e Inventario en phpMyAdmin para habilitar esta pantalla.")
 
-    # --- BOTONES INFERIORES DE NAVEGACIÓN ---
+    # --- BOTONES INFERIORES DE NAVEGACIÓN INTELIGENTE ---
     st.markdown("<br>", unsafe_allow_html=True)
-    if st.session_state["vista_actual"] != "menu_principal":
-        if st.button("⬅️ Volver al menú principal"):
+    formularios_catalogo = ["form_producto", "form_cliente", "form_proveedor", "form_categoria"]
+    
+    if st.session_state["vista_actual"] in formularios_catalogo:
+        col_nav1, col_nav2 = st.columns(2)
+        with col_nav1:
+            if st.button("⬅️ Volver a Catálogos y Registros"):
+                st.session_state["vista_actual"] = "registra_info"
+                st.rerun()
+        with col_nav2:
+            if st.button("🏠 Volver al menú principal"):
+                st.session_state["vista_actual"] = "menu_principal"
+                st.rerun()
+    elif st.session_state["vista_actual"] != "menu_principal":
+        if st.button("🏠 Volver al menú principal"):
             st.session_state["vista_actual"] = "menu_principal"
             st.rerun()
             
