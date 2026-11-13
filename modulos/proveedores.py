@@ -1,48 +1,51 @@
 import streamlit as st
 from config.conexion import obtener_conexion
 
-def auto_formato_dui():
-    raw = "".join(filter(str.isdigit, st.session_state.get("input_dui", "")))[:9]
-    if len(raw) > 8:
-        st.session_state["input_dui"] = f"{raw[:8]}-{raw[8:]}"
+def limpiar_y_formatear_dui():
+    texto_actual = st.session_state.get("input_dui", "")
+    solo_num = "".join(filter(str.isdigit, texto_actual))
+    if len(solo_num) > 9:
+        st.session_state["alerta_dui"] = "⚠️ El DUI solo permite 9 dígitos. Se ajustó al límite."
+        solo_num = solo_num[:9]
     else:
-        st.session_state["input_dui"] = raw
-
-def auto_formato_nit():
-    raw = "".join(filter(str.isdigit, st.session_state.get("input_nit", "")))[:14]
-    if len(raw) > 13:
-        st.session_state["input_nit"] = f"{raw[:4]}-{raw[4:10]}-{raw[10:13]}-{raw[13:]}"
-    elif len(raw) > 10:
-        st.session_state["input_nit"] = f"{raw[:4]}-{raw[4:10]}-{raw[10:]}"
-    elif len(raw) > 4:
-        st.session_state["input_nit"] = f"{raw[:4]}-{raw[4:]}"
+        st.session_state["alerta_dui"] = ""
+        
+    if len(solo_num) > 8:
+        st.session_state["input_dui"] = f"{solo_num[:8]}-{solo_num[8:]}"
     else:
-        st.session_state["input_nit"] = raw
+        st.session_state["input_dui"] = solo_num
 
-def auto_formato_tel():
-    raw = "".join(filter(str.isdigit, st.session_state.get("input_tel", "")))[:8]
-    if len(raw) > 4:
-        st.session_state["input_tel"] = f"{raw[:4]}-{raw[4:]}"
+def limpiar_y_formatear_nit():
+    texto_actual = st.session_state.get("input_nit", "")
+    solo_num = "".join(filter(str.isdigit, texto_actual))
+    if len(solo_num) > 14:
+        st.session_state["alerta_nit"] = "⚠️ El NIT solo permite 14 dígitos. Se ajustó al límite."
+        solo_num = solo_num[:14]
     else:
-        st.session_state["input_tel"] = raw
+        st.session_state["alerta_nit"] = ""
+        
+    if len(solo_num) > 13:
+        st.session_state["input_nit"] = f"{solo_num[:4]}-{solo_num[4:10]}-{solo_num[10:13]}-{solo_num[13:]}"
+    elif len(solo_num) > 10:
+        st.session_state["input_nit"] = f"{solo_num[:4]}-{solo_num[4:10]}-{solo_num[10:]}"
+    elif len(solo_num) > 4:
+        st.session_state["input_nit"] = f"{solo_num[:4]}-{solo_num[4:]}"
+    else:
+        st.session_state["input_nit"] = solo_num
 
-def validar_dui_nit(valor, tipo_doc):
-    solo_numeros = "".join(filter(str.isdigit, valor))
-    if tipo_doc == "Ninguno" or len(solo_numeros) == 0:
-        return "", True
-    elif tipo_doc == "DUI" and len(solo_numeros) == 9:
-        return f"{solo_numeros[:8]}-{solo_numeros[8:]}", True
-    elif tipo_doc == "NIT" and len(solo_numeros) == 14:
-        return f"{solo_numeros[:4]}-{solo_numeros[4:10]}-{solo_numeros[10:13]}-{solo_numeros[13:]}", True
-    return valor, False
-
-def validar_telefono(valor):
-    solo_numeros = "".join(filter(str.isdigit, valor))
-    if len(solo_numeros) == 0:
-        return "", True
-    elif len(solo_numeros) == 8:
-        return f"{solo_numeros[:4]}-{solo_numeros[4:]}", True
-    return valor, False
+def limpiar_y_formatear_tel():
+    texto_actual = st.session_state.get("input_tel", "")
+    solo_num = "".join(filter(str.isdigit, texto_actual))
+    if len(solo_num) > 8:
+        st.session_state["alerta_tel"] = "⚠️ El teléfono en El Salvador solo tiene 8 dígitos."
+        solo_num = solo_num[:8]
+    else:
+        st.session_state["alerta_tel"] = ""
+        
+    if len(solo_num) > 4:
+        st.session_state["input_tel"] = f"{solo_num[:4]}-{solo_num[4:]}"
+    else:
+        st.session_state["input_tel"] = solo_num
 
 def mostrar_proveedores():
     st.header("🚚 Gestión de Proveedores")
@@ -50,11 +53,8 @@ def mostrar_proveedores():
     nombre = st.text_input("Nombre o Razón Social")
     tipo = st.selectbox("Tipo de Proveedor", ["Persona Natural", "Empresa", "Cooperativa", "Otro"])
     
-    # Regla de negocio: Solo las personas naturales tienen DUI
-    if tipo == "Persona Natural":
-        opciones_doc = ["Ninguno", "DUI", "NIT"]
-    else:
-        opciones_doc = ["Ninguno", "NIT"]
+    # Regla de negocio: Solo las personas naturales pueden registrar DUI
+    opciones_doc = ["Ninguno", "DUI", "NIT"] if tipo == "Persona Natural" else ["Ninguno", "NIT"]
         
     tipo_doc = st.radio(
         "Documento de Identificación",
@@ -64,45 +64,69 @@ def mostrar_proveedores():
     
     dui_nit_raw = ""
     if tipo_doc == "DUI":
+        # Tope dinámico: 9 caracteres si aún no tiene guion, 10 cuando ya tiene guion
+        tope_dui = 10 if "-" in st.session_state.get("input_dui", "") else 9
         dui_nit_raw = st.text_input(
             "Número de DUI",
-            max_chars=10,
+            max_chars=tope_dui,
             placeholder="00000000-0",
             key="input_dui",
-            on_change=auto_formato_dui
+            on_change=limpiar_y_formatear_dui
         )
+        if st.session_state.get("alerta_dui"):
+            st.caption(st.session_state["alerta_dui"])
+            
     elif tipo_doc == "NIT":
+        tope_nit = 17 if "-" in st.session_state.get("input_nit", "") else 14
         dui_nit_raw = st.text_input(
             "Número de NIT",
-            max_chars=17,
+            max_chars=tope_nit,
             placeholder="0000-000000-000-0",
             key="input_nit",
-            on_change=auto_formato_nit
+            on_change=limpiar_y_formatear_nit
         )
+        if st.session_state.get("alerta_nit"):
+            st.caption(st.session_state["alerta_nit"])
         
-    # max_chars=8 evita que escriban un noveno dígito antes de poner el guion
+    # Tope dinámico: 8 caracteres si aún no tiene guion, 9 cuando ya tiene guion
+    tope_tel = 9 if "-" in st.session_state.get("input_tel", "") else 8
     telefono_raw = st.text_input(
         "Teléfono",
-        max_chars=8 if "-" not in st.session_state.get("input_tel", "") else 9,
+        max_chars=tope_tel,
         placeholder="0000-0000",
         key="input_tel",
-        on_change=auto_formato_tel
+        on_change=limpiar_y_formatear_tel
     )
+    if st.session_state.get("alerta_tel"):
+        st.caption(st.session_state["alerta_tel"])
 
     if st.button("Guardar Proveedor"):
         if not nombre.strip():
             st.warning("⚠️ El nombre del proveedor es obligatorio.")
             return
             
-        dui_nit_formateado, doc_valido = validar_dui_nit(dui_nit_raw, tipo_doc)
-        tel_formateado, tel_valido = validar_telefono(telefono_raw)
+        # Validación final de longitudes exactas
+        num_doc = "".join(filter(str.isdigit, dui_nit_raw))
+        num_tel = "".join(filter(str.isdigit, telefono_raw))
         
-        if not doc_valido:
-            st.error(f"❌ El {tipo_doc} ingresado está incompleto.")
+        if tipo_doc == "DUI" and len(num_doc) != 9:
+            st.error("❌ El DUI debe tener exactamente 9 dígitos.")
             return
-        if not tel_valido:
-            st.error("❌ El número de teléfono debe tener 8 dígitos.")
+        if tipo_doc == "NIT" and len(num_doc) != 14:
+            st.error("❌ El NIT debe tener exactamente 14 dígitos.")
             return
+        if len(num_tel) > 0 and len(num_tel) != 8:
+            st.error("❌ El número de teléfono debe tener exactamente 8 dígitos.")
+            return
+
+        # Formateo garantizado antes de insertar
+        doc_final = None
+        if tipo_doc == "DUI" and len(num_doc) == 9:
+            doc_final = f"{num_doc[:8]}-{num_doc[8:]}"
+        elif tipo_doc == "NIT" and len(num_doc) == 14:
+            doc_final = f"{num_doc[:4]}-{num_doc[4:10]}-{num_doc[10:13]}-{num_doc[13:]}"
+            
+        tel_final = f"{num_tel[:4]}-{num_tel[4:]}" if len(num_tel) == 8 else None
 
         conexion = obtener_conexion()
         if conexion:
@@ -112,12 +136,7 @@ def mostrar_proveedores():
                     INSERT INTO Proveedor (Nombre, Tipo, DUI_NIT, Telefono)
                     VALUES (%s, %s, %s, %s)
                 """
-                cursor.execute(consulta, (
-                    nombre.strip(),
-                    tipo,
-                    dui_nit_formateado if dui_nit_formateado else None,
-                    tel_formateado if tel_formateado else None
-                ))
+                cursor.execute(consulta, (nombre.strip(), tipo, doc_final, tel_final))
                 conexion.commit()
                 st.success(f"✅ Proveedor '{nombre.strip()}' registrado correctamente.")
             except Exception as e:
