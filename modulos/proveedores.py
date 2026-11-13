@@ -32,12 +32,22 @@ def limpiar_y_formatear_tel():
 def mostrar_proveedores():
     st.header("🚚 Gestión de Proveedores")
     
-    # Mostrar mensaje de éxito si se acaba de guardar un proveedor
-    if "msg_exito_prov" in st.session_state and st.session_state["msg_exito_prov"]:
+    # 1. Vaciar los campos ANTES de dibujarlos si se activó la bandera de limpieza
+    if st.session_state.get("limpiar_campos_prov", False):
+        st.session_state["input_nombre_prov"] = ""
+        st.session_state["input_tipo_prov"] = "Persona Natural"
+        st.session_state["input_doc_radio"] = "Ninguno"
+        st.session_state["input_dui"] = ""
+        st.session_state["input_nit"] = ""
+        st.session_state["input_tel"] = ""
+        st.session_state["limpiar_campos_prov"] = False
+
+    # 2. Mostrar mensaje de éxito si se acaba de guardar un proveedor
+    if st.session_state.get("msg_exito_prov"):
         st.success(st.session_state["msg_exito_prov"])
         st.session_state["msg_exito_prov"] = ""
 
-    # Inicializar claves de los campos si no existen
+    # 3. Inicializar claves de los campos si es la primera vez que se abre
     if "input_nombre_prov" not in st.session_state:
         st.session_state["input_nombre_prov"] = ""
     if "input_tipo_prov" not in st.session_state:
@@ -51,6 +61,7 @@ def mostrar_proveedores():
     if "input_tel" not in st.session_state:
         st.session_state["input_tel"] = ""
 
+    # 4. Dibujar los campos del formulario
     nombre = st.text_input("Nombre o Razón Social", key="input_nombre_prov")
     tipo = st.selectbox(
         "Tipo de Proveedor", 
@@ -58,7 +69,6 @@ def mostrar_proveedores():
         key="input_tipo_prov"
     )
     
-    # Regla de negocio: Solo las personas naturales pueden registrar DUI
     opciones_doc = ["Ninguno", "DUI", "NIT"] if tipo == "Persona Natural" else ["Ninguno", "NIT"]
     if st.session_state["input_doc_radio"] not in opciones_doc:
         st.session_state["input_doc_radio"] = "Ninguno"
@@ -103,6 +113,7 @@ def mostrar_proveedores():
         on_change=limpiar_y_formatear_tel
     )
 
+    # 5. Guardar en la base de datos
     if st.button("Guardar Proveedor"):
         if not nombre.strip():
             st.warning("⚠️ El nombre del proveedor es obligatorio.")
@@ -140,16 +151,9 @@ def mostrar_proveedores():
                 cursor.execute(consulta, (nombre.strip(), tipo, doc_final, tel_final))
                 conexion.commit()
                 
-                # Limpiar todos los campos de la sesión para dejar el formulario vacío
+                # Activar la bandera para que se limpien al inicio del siguiente ciclo
                 st.session_state["msg_exito_prov"] = f"✅ Proveedor '{nombre.strip()}' registrado correctamente."
-                st.session_state["input_nombre_prov"] = ""
-                st.session_state["input_tipo_prov"] = "Persona Natural"
-                st.session_state["input_doc_radio"] = "Ninguno"
-                st.session_state["input_dui"] = ""
-                st.session_state["input_nit"] = ""
-                st.session_state["input_tel"] = ""
-                
-                # Recargar la pantalla de inmediato con los campos vacíos
+                st.session_state["limpiar_campos_prov"] = True
                 st.rerun()
             except Exception as e:
                 st.error(f"Error al registrar proveedor: {e}")
