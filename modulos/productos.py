@@ -1,5 +1,12 @@
 import streamlit as st
+import mysql.connector
 from config.conexion import obtener_conexion
+
+def limpiar_codigo_barras():
+    # Elimina cualquier letra o espacio y corta estrictamente a 13 dígitos
+    texto = st.session_state.get("input_cod_prod", "")
+    solo_num = "".join(filter(str.isdigit, texto))[:13]
+    st.session_state["input_cod_prod"] = solo_num
 
 def obtener_categorias():
     conexion = obtener_conexion()
@@ -61,20 +68,33 @@ def mostrar_productos():
         st.warning("⚠️ Primero debes registrar al menos una categoría en el módulo de Categorías.")
         return
 
+    # 4. Campos del formulario
     nombre = st.text_input("Nombre del Producto", key="input_nombre_prod")
     categoria_sel = st.selectbox("Categoría", categorias, format_func=lambda x: x["Nombre"])
     
-    # Menú desplegable cerrado para evitar errores de escritura
     unidad = st.selectbox(
         "Unidad de Medida",
         ["Unidad", "Libra", "Kilogramo", "Gramo", "Onza", "Litro", "Mililitro", "Caja", "Paquete", "Saco", "Docena"],
         key="input_unidad_prod"
     )
-    codigo_barras = st.text_input("Código de Barras (Opcional)", key="input_cod_prod")
+    
+    codigo_barras = st.text_input(
+        "Código de Barras",
+        max_chars=13,
+        placeholder="7410000000000",
+        key="input_cod_prod",
+        on_change=limpiar_codigo_barras
+    )
 
+    # 5. Validación y guardado
     if st.button("Guardar Producto"):
         if not nombre.strip():
             st.warning("⚠️ El nombre del producto es obligatorio.")
+            return
+            
+        cod_limpio = "".join(filter(str.isdigit, codigo_barras))
+        if len(cod_limpio) != 13:
+            st.error("❌ El código de barras es obligatorio y debe tener exactamente 13 dígitos numéricos.")
             return
 
         conexion = obtener_conexion()
@@ -82,17 +102,10 @@ def mostrar_productos():
             try:
                 cursor = conexion.cursor()
                 # Validar que no se repita el nombre o el código de barras
-                if codigo_barras.strip():
-                    cursor.execute(
-                        "SELECT id_producto FROM Producto WHERE LOWER(Nombre) = LOWER(%s) OR Codigo_barras = %s",
-                        (nombre.strip(), codigo_barras.strip())
-                    )
-                else:
-                    cursor.execute(
-                        "SELECT id_producto FROM Producto WHERE LOWER(Nombre) = LOWER(%s)",
-                        (nombre.strip(),)
-                    )
-
+                cursor.execute(
+                    "SELECT id_producto FROM Producto WHERE LOWER(Nombre) = LOWER(%s) OR Codigo_barras = %s",
+                    (nombre.strip(), cod_limpio)
+                )
                 if cursor.fetchone():
                     st.error("❌ Ya existe un producto registrado con ese mismo nombre o código de barras.")
                     return
@@ -105,13 +118,15 @@ def mostrar_productos():
                     categoria_sel["id_categoria"],
                     nombre.strip(),
                     unidad,
-                    codigo_barras.strip() if codigo_barras.strip() else None
+                    cod_limpio
                 ))
                 conexion.commit()
 
                 st.session_state["msg_exito_prod"] = f"✅ Producto '{nombre.strip()}' agregado al catálogo."
                 st.session_state["limpiar_campos_prod"] = True
                 st.rerun()
+            except mysql.connector.IntegrityError:
+                st.error("❌ El código de barras ingresado ya pertenece a otro producto.")
             except Exception as e:
                 st.error(f"Error al registrar producto: {e}")
             finally:
