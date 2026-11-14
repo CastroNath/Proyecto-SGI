@@ -36,7 +36,7 @@ def mostrar_clientes():
 
     # 4. Dibujar formulario diferenciado por Rol
     if es_admin:
-        st.caption("Modo Administrador: Puedes registrar sucursales de la red o el cliente general.")
+        st.caption("Modo Administrador: Puedes registrar sucursales de la red.")
         nombre_final = st.selectbox(
             "Nombre del Cliente",
             ["Externo", "Tienda Santa Ana", "Tienda Sonsonate", "Tienda Ahuachapan"],
