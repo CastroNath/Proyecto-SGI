@@ -29,7 +29,7 @@ def mostrar_clientes():
         st.caption("Modo Administrador: Registro exclusivo de sucursales de la red.")
         nombre_final = st.selectbox(
             "Nombre de la Tienda Cliente",
-            ["Tienda Santa Ana", "Tienda Sonsonate", "Tienda Ahuachapan"],
+            ["Tienda Santa Ana", "Tienda Sonsonate", "Tienda Ahuachapán"],
             key="sel_nombre_cli_admin"
         )
         
@@ -58,12 +58,15 @@ def mostrar_clientes():
         if not nombre_final.strip():
             st.warning("⚠️ El nombre del cliente es obligatorio.")
             return
+            
+        if nombre_final.strip().lower() in ["externo", "consumidor final"]:
+            st.error("❌ Ese nombre está reservado por el sistema para ventas rápidas sin registro.")
+            return
 
         conexion = obtener_conexion()
         if conexion:
             try:
                 cursor = conexion.cursor()
-                # Verificar duplicados
                 cursor.execute(
                     "SELECT id_cliente FROM Cliente WHERE LOWER(Nombre) = LOWER(%s) AND Tipo = %s", 
                     (nombre_final.strip(), tipo_final)
