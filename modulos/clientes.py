@@ -1,13 +1,6 @@
 import streamlit as st
 from config.conexion import obtener_conexion
 
-def sincronizar_tipo_cliente():
-    seleccion = st.session_state.get("sel_nombre_cli_admin", "Externo")
-    if seleccion == "Externo":
-        st.session_state["sel_tipo_cli_admin"] = "Publico general"
-    else:
-        st.session_state["sel_tipo_cli_admin"] = "Tienda"
-
 def mostrar_clientes():
     st.header("🤝 Gestión de Clientes")
     
@@ -16,8 +9,7 @@ def mostrar_clientes():
 
     # 1. Limpiar campos antes de dibujarlos si se activó la bandera
     if st.session_state.get("limpiar_campos_cli", False):
-        st.session_state["sel_nombre_cli_admin"] = "Externo"
-        st.session_state["sel_tipo_cli_admin"] = "Publico general"
+        st.session_state["sel_nombre_cli_admin"] = "Tienda Santa Ana"
         st.session_state["input_nombre_cli_ext"] = ""
         st.session_state["limpiar_campos_cli"] = False
 
@@ -28,29 +20,25 @@ def mostrar_clientes():
 
     # 3. Inicializar claves según el rol
     if "sel_nombre_cli_admin" not in st.session_state:
-        st.session_state["sel_nombre_cli_admin"] = "Externo"
-    if "sel_tipo_cli_admin" not in st.session_state:
-        st.session_state["sel_tipo_cli_admin"] = "Publico general"
+        st.session_state["sel_nombre_cli_admin"] = "Tienda Santa Ana"
     if "input_nombre_cli_ext" not in st.session_state:
         st.session_state["input_nombre_cli_ext"] = ""
 
     # 4. Dibujar formulario diferenciado por Rol
     if es_admin:
-        st.caption("Modo Administrador: Puedes registrar sucursales de la red.")
+        st.caption("Modo Administrador: Registro exclusivo de sucursales de la red.")
         nombre_final = st.selectbox(
-            "Nombre del Cliente",
-            ["Externo", "Tienda Santa Ana", "Tienda Sonsonate", "Tienda Ahuachapan"],
-            key="sel_nombre_cli_admin",
-            on_change=sincronizar_tipo_cliente
+            "Nombre de la Tienda Cliente",
+            ["Tienda Santa Ana", "Tienda Sonsonate", "Tienda Ahuachapan"],
+            key="sel_nombre_cli_admin"
         )
         
-        st.selectbox(
+        st.text_input(
             "Tipo de Cliente",
-            ["Publico general", "Tienda"],
-            key="sel_tipo_cli_admin",
+            value="Tienda",
             disabled=True
         )
-        tipo_final = "Publico general" if nombre_final == "Externo" else "Tienda"
+        tipo_final = "Tienda"
     else:
         nombre_final = st.text_input(
             "Nombre del Cliente",
