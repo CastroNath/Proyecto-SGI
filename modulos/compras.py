@@ -2,13 +2,27 @@ import streamlit as st
 from datetime import date
 from config.conexion import obtener_conexion
 
-def obtener_proveedores():
+def obtener_proveedores(id_tienda_actual):
     conexion = obtener_conexion()
     if not conexion:
         return []
     try:
         cursor = conexion.cursor(dictionary=True)
-        cursor.execute("SELECT id_proveedor, Nombre, Tipo FROM Proveedor ORDER BY Nombre")
+        cursor.execute("SELECT Nombre, Tipo FROM Tienda WHERE id_tienda = %s", (id_tienda_actual,))
+        tienda_actual = cursor.fetchone()
+        
+        es_cd = False
+        if tienda_actual:
+            nombre_t = (tienda_actual["Nombre"] or "").lower()
+            tipo_t = (tienda_actual["Tipo"] or "").lower()
+            if "distribuci" in nombre_t or "distribuci" in tipo_t:
+                es_cd = True
+
+        if es_cd:
+            cursor.execute("SELECT id_proveedor, Nombre, Tipo FROM Proveedor WHERE LOWER(Nombre) NOT LIKE '%distribuci%' ORDER BY Nombre")
+        else:
+            cursor.execute("SELECT id_proveedor, Nombre, Tipo FROM Proveedor ORDER BY Nombre")
+            
         return cursor.fetchall()
     finally:
         cursor.close()
@@ -134,11 +148,11 @@ def mostrar_compras():
         st.success(st.session_state["msg_exito_compra"])
         st.session_state["msg_exito_compra"] = ""
 
-    proveedores = obtener_proveedores()
+    proveedores = obtener_proveedores(id_tienda)
     productos = obtener_productos_catalogo()
     
     if not proveedores:
-        st.warning("⚠️ Primero debes registrar al menos un proveedor en el catálogo.")
+        st.warning("⚠️ No hay proveedores disponibles para esta sucursal en el catálogo.")
         return
     if not productos:
         st.warning("⚠️ Primero debes registrar productos en el catálogo.")
