@@ -1,4 +1,5 @@
 import streamlit as st
+import mysql.connector
 from config.conexion import obtener_conexion
 
 def obtener_roles_y_tiendas():
@@ -8,13 +9,11 @@ def obtener_roles_y_tiendas():
     cursor = None
     try:
         cursor = conexion.cursor(dictionary=True)
-        
         # Filtramos para excluir el rol de Administrador (id_rol = 1)
         cursor.execute("SELECT id_rol, Nombre FROM Rol WHERE id_rol != 1 AND Nombre != 'Administrador'")
         roles = cursor.fetchall()
         
-        # Consultar tiendas disponibles
-        cursor.execute("SELECT id_tienda, Nombre FROM Tienda")
+        cursor.execute("SELECT id_tienda, Nombre FROM Tienda ORDER BY Nombre")
         tiendas = cursor.fetchall()
         
         return roles, tiendas
@@ -28,28 +27,54 @@ def obtener_roles_y_tiendas():
 def registrar_usuario(id_rol, id_tienda, nombre, usuario, contrasena):
     conexion = obtener_conexion()
     if conexion is None:
-        return False
+        return False, "No hay conexión con la base de datos."
     cursor = None
     try:
         cursor = conexion.cursor()
+        # Verificar si el nombre de usuario ya existe
+        cursor.execute("SELECT id_usuario FROM Usuario WHERE LOWER(Usuario) = LOWER(%s)", (usuario,))
+        if cursor.fetchone():
+            return False, f"❌ El nombre de usuario '{usuario}' ya está en uso. Elige otro."
+
         consulta = """
             INSERT INTO Usuario (id_rol, id_tienda, Nombre, Usuario, Contrasena)
             VALUES (%s, %s, %s, %s, %s)
         """
         cursor.execute(consulta, (id_rol, id_tienda, nombre, usuario, contrasena))
         conexion.commit()
-        return True
+        return True, f"✅ Usuario '{usuario}' creado y asignado correctamente."
+    except mysql.connector.IntegrityError:
+        return False, f"❌ El usuario '{usuario}' ya existe en el sistema."
     except Exception as e:
-        st.error(f"Error al registrar: {e}")
-        return False
+        return False, f"❌ Error al registrar: {e}"
     finally:
         if cursor: cursor.close()
         if conexion: conexion.close()
 
 def mostrar_registro():
-    st.header("👑 Crear cuenta de usuario")
-    st.write("Asigna un nuevo empleado a su rol y tienda correspondiente.")
+    st.header("👑 Administración: Crear Cuenta de Usuario")
+    st.write("Asigna un nuevo empleado operativo a su rol y tienda correspondiente.")
     
+    # 1. Limpiar los campos ANTES de dibujarlos si se activó la bandera
+    if st.session_state.get("limpiar_campos_reg", False):
+        st.session_state["reg_nombre"] = ""
+        st.session_state["reg_usuario"] = ""
+        st.session_state["reg_contrasena"] = ""
+        st.session_state["limpiar_campos_reg"] = False
+
+    # 2. Mostrar mensaje de éxito si se acaba de registrar un usuario
+    if st.session_state.get("msg_exito_reg"):
+        st.success(st.session_state["msg_exito_reg"])
+        st.session_state["msg_exito_reg"] = ""
+
+    # 3. Inicializar claves de sesión si no existen
+    if "reg_nombre" not in st.session_state:
+        st.session_state["reg_nombre"] = ""
+    if "reg_usuario" not in st.session_state:
+        st.session_state["reg_usuario"] = ""
+    if "reg_contrasena" not in st.session_state:
+        st.session_state["reg_contrasena"] = ""
+
     lista_roles, lista_tiendas = obtener_roles_y_tiendas()
     
     if not lista_roles:
@@ -59,21 +84,20 @@ def mostrar_registro():
         st.warning("⚠️ No hay tiendas creadas en la base de datos.")
         return
 
-    with st.form("form_registro"):
-        nombre = st.text_input("Nombre completo del empleado")
-        usuario = st.text_input("Nombre de usuario")
-        contrasena = st.text_input("Contraseña", type="password")
-        
-        rol_seleccionado = st.selectbox("Asignar rol", lista_roles, format_func=lambda x: x["Nombre"])
-        tienda_seleccionada = st.selectbox("Asignar tienda", lista_tiendas, format_func=lambda x: x["Nombre"])
-        
-        btn_registrar = st.form_submit_button("Guardar usuario")
-        
-    if btn_registrar:
+    # 4. Dibujar los campos vinculados a session_state
+    nombre = st.text_input("Nombre Completo del Empleado", key="reg_nombre")
+    usuario = st.text_input("Nombre de Usuario", key="reg_usuario")
+    contrasena = st.text_input("Contraseña", type="password", key="reg_contrasena")
+    
+    rol_seleccionado = st.selectbox("Asignar Rol", lista_roles, format_func=lambda x: x["Nombre"])
+    tienda_seleccionada = st.selectbox("Asignar Tienda / Sucursal", lista_tiendas, format_func=lambda x: x["Nombre"])
+    
+    # 5. Guardar y limpiar
+    if st.button("Guardar Usuario"):
         if not nombre.strip() or not usuario.strip() or not contrasena.strip():
-            st.error("Por favor, llena todos los campos.")
+            st.error("⚠️ Por favor, llena todos los campos.")
         else:
-            exito = registrar_usuario(
+            exito, mensaje = registrar_usuario(
                 rol_seleccionado["id_rol"], 
                 tienda_seleccionada["id_tienda"], 
                 nombre.strip(), 
@@ -81,4 +105,8 @@ def mostrar_registro():
                 contrasena
             )
             if exito:
-                st.success(f"✅ Usuario '{usuario.strip()}' creado con el rol de {rol_seleccionado['Nombre']} en {tienda_seleccionada['Nombre']}.")
+                st.session_state["msg_exito_reg"] = f"{mensaje} ({tienda_seleccionada['Nombre']})"
+                st.session_state["limpiar_campos_reg"] = True
+                st.rerun()
+            else:
+                st.error(mensaje)
