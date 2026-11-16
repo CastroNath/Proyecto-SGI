@@ -34,7 +34,6 @@ def registrar_compra_completa(id_tienda, id_usuario, id_proveedor, carrito, tota
     try:
         cursor = conexion.cursor(dictionary=True)
         
-        # 1. Insertar encabezado en Compra
         sql_compra = """
             INSERT INTO Compra (id_tienda, id_proveedor, id_usuario, Total, Estado)
             VALUES (%s, %s, %s, %s, 'Recibida')
@@ -42,9 +41,7 @@ def registrar_compra_completa(id_tienda, id_usuario, id_proveedor, carrito, tota
         cursor.execute(sql_compra, (id_tienda, id_proveedor, id_usuario, total_compra))
         id_compra_gen = cursor.lastrowid
         
-        # 2. Procesar cada producto del carrito de compra
         for item in carrito:
-            # A. Insertar en Detalle_compra
             sql_det = """
                 INSERT INTO Detalle_compra (id_compra, Cantidad, Precio_compra, Precio_venta_sugerido, Fecha_vencimiento)
                 VALUES (%s, %s, %s, %s, %s)
@@ -58,7 +55,6 @@ def registrar_compra_completa(id_tienda, id_usuario, id_proveedor, carrito, tota
             ))
             id_det_compra_gen = cursor.lastrowid
             
-            # B. Actualizar o insertar en ProductoxProveedor (Muchos a Muchos)
             sql_pxp = """
                 INSERT INTO ProductoxProveedor (id_producto, id_proveedor, Ultimo_precio, Fecha_ultima_compra)
                 VALUES (%s, %s, %s, CURDATE())
@@ -68,7 +64,6 @@ def registrar_compra_completa(id_tienda, id_usuario, id_proveedor, carrito, tota
             """
             cursor.execute(sql_pxp, (item["id_producto"], id_proveedor, item["precio_compra"]))
             
-            # C. Verificar si el producto ya existe en el Inventario de esta tienda
             cursor.execute(
                 "SELECT id_inventario FROM Inventario WHERE id_tienda = %s AND id_producto = %s LIMIT 1",
                 (id_tienda, item["id_producto"])
@@ -76,7 +71,6 @@ def registrar_compra_completa(id_tienda, id_usuario, id_proveedor, carrito, tota
             inv_existente = cursor.fetchone()
             
             if inv_existente:
-                # Sumar existencias y actualizar precio de venta
                 sql_upd_inv = """
                     UPDATE Inventario
                     SET Existencia = Existencia + %s,
@@ -91,7 +85,6 @@ def registrar_compra_completa(id_tienda, id_usuario, id_proveedor, carrito, tota
                     inv_existente["id_inventario"]
                 ))
             else:
-                # Crear registro nuevo en el Inventario de esta tienda
                 sql_ins_inv = """
                     INSERT INTO Inventario (id_tienda, id_producto, id_detalle_compra, Existencia, Stock_minimo, Precio_venta)
                     VALUES (%s, %s, %s, %s, 5, %s)
@@ -114,13 +107,28 @@ def registrar_compra_completa(id_tienda, id_usuario, id_proveedor, carrito, tota
         if conexion: conexion.close()
 
 def mostrar_compras():
-    st.header("📥 Registrar compra de mercadería")
+    st.header("📥 Registrar Compra de Mercadería")
     
     id_tienda = st.session_state.get("id_tienda")
     id_usuario = st.session_state.get("id_usuario")
     
+    if st.session_state.get("limpiar_campos_compra", False):
+        st.session_state["comp_cant"] = 1
+        st.session_state["comp_costo"] = 1.00
+        st.session_state["comp_venta"] = 1.25
+        st.session_state["comp_venc_chk"] = False
+        st.session_state["limpiar_campos_compra"] = False
+
     if "carrito_compras" not in st.session_state:
         st.session_state["carrito_compras"] = []
+    if "comp_cant" not in st.session_state:
+        st.session_state["comp_cant"] = 1
+    if "comp_costo" not in st.session_state:
+        st.session_state["comp_costo"] = 1.00
+    if "comp_venta" not in st.session_state:
+        st.session_state["comp_venta"] = 1.25
+    if "comp_venc_chk" not in st.session_state:
+        st.session_state["comp_venc_chk"] = False
         
     if st.session_state.get("msg_exito_compra"):
         st.success(st.session_state["msg_exito_compra"])
@@ -136,7 +144,6 @@ def mostrar_compras():
         st.warning("⚠️ Primero debes registrar productos en el catálogo.")
         return
 
-    # 1. Selección de Proveedor
     prov_sel = st.selectbox(
         "Proveedor",
         proveedores,
@@ -144,9 +151,8 @@ def mostrar_compras():
     )
 
     st.divider()
-
-    # 2. Agregar productos a la compra
     st.subheader("Detalle de Productos Recibidos")
+    
     c1, c2 = st.columns(2)
     with c1:
         prod_sel = st.selectbox(
@@ -154,17 +160,17 @@ def mostrar_compras():
             productos,
             format_func=lambda x: f"{x['Nombre']} ({x['Unidad_medida']}) - {x['Codigo_barras']}"
         )
-        cantidad = st.number_input("Cantidad recibida", min_value=1, value=10, step=1)
+        cantidad = st.number_input("Cantidad recibida", min_value=1, step=1, key="comp_cant")
     with c2:
-        precio_compra = st.number_input("Precio de compra unitario ($)", min_value=0.01, value=1.00, step=0.05, format="%.2f")
-        precio_venta = st.number_input("Precio de venta sugerido ($)", min_value=0.01, value=1.25, step=0.05, format="%.2f")
+        precio_compra = st.number_input("Precio de Compra Unitario ($)", min_value=0.01, step=0.05, format="%.2f", key="comp_costo")
+        precio_venta = st.number_input("Precio de Venta Definido ($)", min_value=0.01, step=0.05, format="%.2f", key="comp_venta")
 
-    tiene_vencimiento = st.checkbox("📅 Este lote tiene fecha de vencimiento")
+    tiene_vencimiento = st.checkbox("📅 Este lote tiene fecha de vencimiento", key="comp_venc_chk")
     fecha_venc = None
     if tiene_vencimiento:
         fecha_venc = st.date_input("Fecha de Vencimiento", min_value=date.today())
 
-    if st.button("➕ Agregar producto a la compra"):
+    if st.button("➕ Agregar Producto a la Compra"):
         st.session_state["carrito_compras"].append({
             "id_producto": prod_sel["id_producto"],
             "nombre": prod_sel["Nombre"],
@@ -175,9 +181,9 @@ def mostrar_compras():
             "fecha_venc": fecha_venc,
             "subtotal": cantidad * precio_compra
         })
+        st.session_state["limpiar_campos_compra"] = True
         st.rerun()
 
-    # 3. Resumen y Guardado
     if st.session_state["carrito_compras"]:
         st.divider()
         st.subheader("Resumen de la Orden de Compra")
@@ -200,6 +206,7 @@ def mostrar_compras():
         with b1:
             if st.button("🧹 Limpiar Orden"):
                 st.session_state["carrito_compras"] = []
+                st.session_state["limpiar_campos_compra"] = True
                 st.rerun()
         with b2:
             if st.button("💾 Confirmar Compra e Ingresar al Inventario"):
@@ -213,6 +220,7 @@ def mostrar_compras():
                 if exito:
                     st.session_state["carrito_compras"] = []
                     st.session_state["msg_exito_compra"] = msg
+                    st.session_state["limpiar_campos_compra"] = True
                     st.rerun()
                 else:
                     st.error(msg)
