@@ -1,13 +1,34 @@
 import streamlit as st
 from config.conexion import obtener_conexion
 
-def obtener_clientes_registrados():
+def es_centro_distribucion(id_tienda):
+    conexion = obtener_conexion()
+    if not conexion:
+        return False
+    try:
+        cursor = conexion.cursor(dictionary=True)
+        cursor.execute("SELECT Nombre, Tipo FROM Tienda WHERE id_tienda = %s", (id_tienda,))
+        tienda = cursor.fetchone()
+        if tienda:
+            nombre_t = (tienda["Nombre"] or "").lower()
+            tipo_t = (tienda["Tipo"] or "").lower()
+            if "distribuci" in nombre_t or "distribuci" in tipo_t:
+                return True
+        return False
+    finally:
+        cursor.close()
+        conexion.close()
+
+def obtener_clientes_segun_rol(solo_tiendas=False):
     conexion = obtener_conexion()
     if not conexion:
         return []
     try:
         cursor = conexion.cursor(dictionary=True)
-        cursor.execute("SELECT id_cliente, Nombre, Tipo FROM Cliente WHERE id_cliente != 1 ORDER BY Nombre")
+        if solo_tiendas:
+            cursor.execute("SELECT id_cliente, Nombre, Tipo FROM Cliente WHERE Tipo = 'Tienda' ORDER BY Nombre")
+        else:
+            cursor.execute("SELECT id_cliente, Nombre, Tipo FROM Cliente WHERE id_cliente != 1 AND Tipo != 'Tienda' ORDER BY Nombre")
         return cursor.fetchall()
     finally:
         cursor.close()
@@ -85,6 +106,7 @@ def mostrar_ventas():
     
     id_tienda = st.session_state.get("id_tienda")
     id_usuario = st.session_state.get("id_usuario")
+    es_cd = es_centro_distribucion(id_tienda)
     
     if st.session_state.get("limpiar_campos_venta", False):
         st.session_state["venta_req_factura"] = False
@@ -99,32 +121,47 @@ def mostrar_ventas():
         st.success(st.session_state["msg_exito_venta"])
         st.session_state["msg_exito_venta"] = ""
 
-    st.subheader("Datos del Comprador")
-    requiere_factura = st.checkbox("🧾 El cliente requiere factura con nombre / datos (o es venta a sucursal)", key="venta_req_factura")
-    
-    id_cliente_final = 1
-    if requiere_factura:
-        clientes = obtener_clientes_registrados()
-        if not clientes:
-            st.warning("⚠️ No hay clientes registrados aún. Puedes registrarlo en el catálogo de Clientes o continuar como Consumidor Final.")
-            id_cliente_final = 1
-        else:
-            cliente_sel = st.selectbox(
-                "Selecciona el Cliente o Tienda",
-                clientes,
-                format_func=lambda x: f"{x['Nombre']} ({x['Tipo']})"
-            )
-            id_cliente_final = cliente_sel["id_cliente"]
+    # --- DATOS DEL COMPRADOR DIFERENCIADOS ---
+    if es_cd:
+        st.subheader("Destino del Despacho")
+        tiendas_destino = obtener_clientes_segun_rol(solo_tiendas=True)
+        if not tiendas_destino:
+            st.warning("⚠️ No hay tiendas registradas como clientes en el catálogo.")
+            return
+        tienda_sel = st.selectbox(
+            "Selecciona la Tienda",
+            tiendas_destino,
+            format_func=lambda x: x["Nombre"]
+        )
+        id_cliente_final = tienda_sel["id_cliente"]
     else:
-        st.info("⚡ Venta rápida: Se registrará automáticamente como **Consumidor Final (Externo)**.")
+        st.subheader("Datos del Comprador")
+        requiere_factura = st.checkbox("🧾 El cliente requiere factura con nombre / datos", key="venta_req_factura")
+        
+        id_cliente_final = 1
+        if requiere_factura:
+            clientes = obtener_clientes_segun_rol(solo_tiendas=False)
+            if not clientes:
+                st.warning("⚠️ No hay clientes particulares registrados aún. Se facturará como Consumidor Final.")
+                id_cliente_final = 1
+            else:
+                cliente_sel = st.selectbox(
+                    "Selecciona el Cliente",
+                    clientes,
+                    format_func=lambda x: x["Nombre"]
+                )
+                id_cliente_final = cliente_sel["id_cliente"]
+        else:
+            st.info("⚡ Venta rápida: Se registrará automáticamente como **Consumidor Final (Externo)**.")
 
     st.divider()
 
+    # --- SELECCIÓN DE PRODUCTOS ---
     st.subheader("Agregar Productos al Carrito")
     productos_disp = obtener_productos_disponibles(id_tienda)
     
     if not productos_disp:
-        st.warning("📦 No hay productos con existencias disponibles en el inventario de esta tienda. Debes registrar una compra primero.")
+        st.warning("📦 No hay productos con existencias disponibles en el inventario de esta sucursal. Debes registrar una compra primero.")
         return
 
     col_p1, col_p2, col_p3 = st.columns([3, 1, 1])
@@ -165,6 +202,7 @@ def mostrar_ventas():
                 })
             st.rerun()
 
+    # --- DETALLE DE LA VENTA ---
     if st.session_state["carrito_ventas"]:
         st.divider()
         st.subheader("Detalle de la Venta")
