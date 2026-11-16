@@ -18,7 +18,6 @@ st.markdown("""
         40% { transform: translateY(-8px); }
         70% { transform: translateY(-3px); }
     }
-    /* 1. Botones normales (formularios, Agregar, Guardar, Volver, Cerrar sesión) */
     div.stButton > button[kind="secondary"] {
         background-color: #13294B;
         color: white;
@@ -33,8 +32,6 @@ st.markdown("""
         background-color: #1e3f73;
         color: white;
     }
-
-    /* 2. Tarjetas grandes presionables (usando kind="primary" exclusivo para los menús) */
     div.stButton > button[kind="primary"] {
         background-color: #f8f9fa;
         color: #1f2937;
@@ -60,14 +57,12 @@ st.markdown("""
         line-height: 1.3;
         white-space: normal;
     }
-    /* Emoji grande arriba (usando <em> en markdown) */
     div.stButton > button[kind="primary"] em {
         font-style: normal;
         font-size: 42px;
         margin-bottom: 8px;
         display: block;
     }
-    /* Título en negrita en medio (usando <strong> en markdown) */
     div.stButton > button[kind="primary"] strong {
         font-size: 17px;
         font-weight: bold;
@@ -75,7 +70,6 @@ st.markdown("""
         margin-bottom: 6px;
         display: block;
     }
-    /* Descripción gris abajo (usando <code> en markdown sin fondo) */
     div.stButton > button[kind="primary"] code {
         background-color: transparent;
         font-family: inherit;
@@ -104,7 +98,6 @@ if not st.session_state["sesion_iniciada"]:
 else:
     st.caption(f"👤 Usuario: **{st.session_state['nombre_completo']}** | 🏪 ID Tienda: **{st.session_state['id_tienda']}** | 🔑 ID Rol: **{st.session_state['id_rol']}**")
     
-    # --- VISTA 1: MENÚ PRINCIPAL ---
     if st.session_state["vista_actual"] == "menu_principal":
         st.markdown("<h2 style='text-align: center; margin-bottom: 30px;'>Red Cooperativa de Mujeres de Occidente</h2>", unsafe_allow_html=True)
         
@@ -135,7 +128,6 @@ else:
             if st.button("*📊* **Reportes y Consultas** `Movimientos y reportes por tienda o globales`", key="btn_rep", type="primary"):
                 st.info("Módulo en construcción (Próxima fase).")
 
-    # --- VISTA 2: SUBMENÚ CATÁLOGOS Y REGISTROS ---
     elif st.session_state["vista_actual"] == "registra_info":
         st.markdown("<h3 style='text-align: center; margin-bottom: 25px;'>✏️ Catálogos y Registros</h3>", unsafe_allow_html=True)
         s1, s2, s3, s4 = st.columns(4)
@@ -156,10 +148,9 @@ else:
                 st.session_state["vista_actual"] = "form_categoria"
                 st.rerun()
 
-    # --- VISTA 3: SUBMENÚ COMPRAS Y VENTAS ---
     elif st.session_state["vista_actual"] == "compra_venta":
         st.markdown("<h3 style='text-align: center; margin-bottom: 25px;'>💸 Operaciones Comerciales</h3>", unsafe_allow_html=True)
-        cv1, cv2 = st.columns(2)
+        esp1, cv1, cv2, esp2 = st.columns([0.5, 1, 1, 0.5])
         with cv1:
             if st.button("*🛍️* **Registrar Venta** `Salida de productos a clientes o sucursales`", key="sub_venta", type="primary"):
                 st.session_state["vista_actual"] = "form_venta"
@@ -169,7 +160,6 @@ else:
                 st.session_state["vista_actual"] = "form_compra"
                 st.rerun()
 
-    # --- VISTAS DE FORMULARIOS ---
     elif st.session_state["vista_actual"] == "administracion":
         mostrar_registro()
     elif st.session_state["vista_actual"] == "form_producto":
@@ -187,7 +177,6 @@ else:
     elif st.session_state["vista_actual"] == "inventario":
         mostrar_inventario()
 
-    # --- BOTONES INFERIORES DE NAVEGACIÓN (Todos compactos y azul marino) ---
     st.markdown("<br>", unsafe_allow_html=True)
     formularios_catalogo = ["form_producto", "form_cliente", "form_proveedor", "form_categoria"]
     formularios_comerciales = ["form_venta", "form_compra"]
