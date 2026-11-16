@@ -13,82 +13,17 @@ st.set_page_config(page_title="Red Cooperativa de Mujeres de Occidente", layout=
 
 st.markdown("""
     <style>
-    @keyframes rebotar {
-        0%, 100% { transform: translateY(0); }
-        40% { transform: translateY(-8px); }
-        70% { transform: translateY(-3px); }
-    }
-    div.stButton > button {
-        background-color: #13294B;
-        color: white;
-        width: 100%;
-        border-radius: 8px;
-        border: none;
-        padding: 10px 15px;
-        font-weight: 500;
-        transition: all 0.2s ease;
-    }
-    div.stButton > button:hover {
-        background-color: #1e3f73;
-        color: white;
-    }
-    div[data-testid="stHorizontalBlock"] div.stButton > button {
-        background-color: #f8f9fa;
-        color: #1f2937;
-        border: 1px solid #d1d5db;
-        border-radius: 12px;
-        padding: 22px 15px;
-        height: 190px;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.04);
-    }
-    div[data-testid="stHorizontalBlock"] div.stButton > button > div {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        width: 100%;
-    }
-    div[data-testid="stHorizontalBlock"] div.stButton > button p:nth-of-type(1) {
-        font-size: 44px;
-        line-height: 1.2;
-        margin-bottom: 8px;
-    }
-    div[data-testid="stHorizontalBlock"] div.stButton > button p:nth-of-type(2) {
-        font-size: 17px;
-        font-weight: bold;
-        color: #111827;
-        margin-bottom: 4px;
-        white-space: normal;
-    }
-    div[data-testid="stHorizontalBlock"] div.stButton > button p:nth-of-type(3) {
-        font-size: 13px;
-        color: #6b7280;
-        line-height: 1.3;
-        white-space: normal;
-    }
-    div[data-testid="stHorizontalBlock"] div.stButton > button:hover {
-        background-color: #ffffff;
-        border-color: #13294B;
-        box-shadow: 0 8px 16px rgba(19, 41, 75, 0.12);
-        animation: rebotar 0.5s ease;
-    }
-    .boton-normal div.stButton > button {
-        background-color: #13294B !important;
-        color: white !important;
-        height: auto !important;
-        min-height: 42px !important;
-        padding: 10px 15px !important;
-        animation: none !important;
-    }
-    .boton-normal div.stButton > button p {
-        font-size: 15px !important;
-        color: white !important;
-        margin: 0 !important;
-    }
+    @keyframes rebotar { 0%, 100% { transform: translateY(0); } 40% { transform: translateY(-8px); } 70% { transform: translateY(-3px); } }
+    div.stButton > button { background-color: #13294B; color: white; width: 100%; border-radius: 8px; border: none; padding: 10px 15px; font-weight: 500; transition: all 0.2s ease; }
+    div.stButton > button:hover { background-color: #1e3f73; color: white; }
+    div[data-testid="stHorizontalBlock"] div.stButton > button { background-color: #f8f9fa; color: #1f2937; border: 1px solid #d1d5db; border-radius: 12px; padding: 22px 15px; height: 190px; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 2px 5px rgba(0,0,0,0.04); }
+    div[data-testid="stHorizontalBlock"] div.stButton > button > div { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; }
+    div[data-testid="stHorizontalBlock"] div.stButton > button p:nth-of-type(1) { font-size: 44px; line-height: 1.2; margin-bottom: 8px; }
+    div[data-testid="stHorizontalBlock"] div.stButton > button p:nth-of-type(2) { font-size: 17px; font-weight: bold; color: #111827; margin-bottom: 4px; white-space: normal; }
+    div[data-testid="stHorizontalBlock"] div.stButton > button p:nth-of-type(3) { font-size: 13px; color: #6b7280; line-height: 1.3; white-space: normal; }
+    div[data-testid="stHorizontalBlock"] div.stButton > button:hover { background-color: #ffffff; border-color: #13294B; box-shadow: 0 8px 16px rgba(19, 41, 75, 0.12); animation: rebotar 0.5s ease; }
+    .boton-normal div.stButton > button { background-color: #13294B !important; color: white !important; height: auto !important; min-height: 42px !important; padding: 10px 15px !important; animation: none !important; }
+    .boton-normal div.stButton > button p { font-size: 15px !important; color: white !important; margin: 0 !important; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -227,3 +162,7 @@ else:
             st.rerun()
             
     if st.button("🚪 Cerrar sesión"):
+        st.session_state["sesion_iniciada"] = False
+        st.session_state["vista_actual"] = "menu_principal"
+        st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
