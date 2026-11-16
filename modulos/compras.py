@@ -114,7 +114,7 @@ def registrar_compra_completa(id_tienda, id_usuario, id_proveedor, carrito, tota
         if conexion: conexion.close()
 
 def mostrar_compras():
-    st.header("📥 Registrar Compra de Mercadería")
+    st.header("📥 Registrar compra de mercadería")
     
     id_tienda = st.session_state.get("id_tienda")
     id_usuario = st.session_state.get("id_usuario")
@@ -156,15 +156,15 @@ def mostrar_compras():
         )
         cantidad = st.number_input("Cantidad recibida", min_value=1, value=10, step=1)
     with c2:
-        precio_compra = st.number_input("Precio de Compra Unitario ($)", min_value=0.01, value=1.00, step=0.05, format="%.2f")
-        precio_venta = st.number_input("Precio de Venta Definido ($)", min_value=0.01, value=1.25, step=0.05, format="%.2f")
+        precio_compra = st.number_input("Precio de compra unitario ($)", min_value=0.01, value=1.00, step=0.05, format="%.2f")
+        precio_venta = st.number_input("Precio de venta sugerido ($)", min_value=0.01, value=1.25, step=0.05, format="%.2f")
 
     tiene_vencimiento = st.checkbox("📅 Este lote tiene fecha de vencimiento")
     fecha_venc = None
     if tiene_vencimiento:
         fecha_venc = st.date_input("Fecha de Vencimiento", min_value=date.today())
 
-    if st.button("➕ Agregar Producto a la Compra"):
+    if st.button("➕ Agregar producto a la compra"):
         st.session_state["carrito_compras"].append({
             "id_producto": prod_sel["id_producto"],
             "nombre": prod_sel["Nombre"],
