@@ -13,17 +13,84 @@ st.set_page_config(page_title="Red Cooperativa de Mujeres de Occidente", layout=
 
 st.markdown("""
     <style>
-    @keyframes rebotar { 0%, 100% { transform: translateY(0); } 40% { transform: translateY(-8px); } 70% { transform: translateY(-3px); } }
-    div.stButton > button { background-color: #13294B; color: white; width: 100%; border-radius: 8px; border: none; padding: 10px 15px; font-weight: 500; transition: all 0.2s ease; }
-    div.stButton > button:hover { background-color: #1e3f73; color: white; }
-    div[data-testid="stHorizontalBlock"] div.stButton > button { background-color: #f8f9fa; color: #1f2937; border: 1px solid #d1d5db; border-radius: 12px; padding: 22px 15px; height: 190px; display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 2px 5px rgba(0,0,0,0.04); }
-    div[data-testid="stHorizontalBlock"] div.stButton > button > div { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; }
-    div[data-testid="stHorizontalBlock"] div.stButton > button p:nth-of-type(1) { font-size: 44px; line-height: 1.2; margin-bottom: 8px; }
-    div[data-testid="stHorizontalBlock"] div.stButton > button p:nth-of-type(2) { font-size: 17px; font-weight: bold; color: #111827; margin-bottom: 4px; white-space: normal; }
-    div[data-testid="stHorizontalBlock"] div.stButton > button p:nth-of-type(3) { font-size: 13px; color: #6b7280; line-height: 1.3; white-space: normal; }
-    div[data-testid="stHorizontalBlock"] div.stButton > button:hover { background-color: #ffffff; border-color: #13294B; box-shadow: 0 8px 16px rgba(19, 41, 75, 0.12); animation: rebotar 0.5s ease; }
-    .boton-normal div.stButton > button { background-color: #13294B !important; color: white !important; height: auto !important; min-height: 42px !important; padding: 10px 15px !important; animation: none !important; }
-    .boton-normal div.stButton > button p { font-size: 15px !important; color: white !important; margin: 0 !important; }
+    @keyframes rebotar {
+        0%, 100% { transform: translateY(0); }
+        40% { transform: translateY(-8px); }
+        70% { transform: translateY(-3px); }
+    }
+    /* 1. Botones normales (formularios, Agregar, Guardar, Volver, Cerrar sesión) */
+    div.stButton > button[kind="secondary"] {
+        background-color: #13294B;
+        color: white;
+        width: 100%;
+        border-radius: 8px;
+        border: none;
+        padding: 10px 15px;
+        font-weight: 500;
+        transition: all 0.2s ease;
+    }
+    div.stButton > button[kind="secondary"]:hover {
+        background-color: #1e3f73;
+        color: white;
+    }
+
+    /* 2. Tarjetas grandes presionables (usando kind="primary" exclusivo para los menús) */
+    div.stButton > button[kind="primary"] {
+        background-color: #f8f9fa;
+        color: #1f2937;
+        border: 1px solid #d1d5db;
+        border-radius: 12px;
+        padding: 24px 15px;
+        height: 195px;
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.04);
+        transition: all 0.2s ease;
+    }
+    div.stButton > button[kind="primary"] p {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        margin: 0;
+        line-height: 1.3;
+        white-space: normal;
+    }
+    /* Emoji grande arriba (usando <em> en markdown) */
+    div.stButton > button[kind="primary"] em {
+        font-style: normal;
+        font-size: 42px;
+        margin-bottom: 8px;
+        display: block;
+    }
+    /* Título en negrita en medio (usando <strong> en markdown) */
+    div.stButton > button[kind="primary"] strong {
+        font-size: 17px;
+        font-weight: bold;
+        color: #111827;
+        margin-bottom: 6px;
+        display: block;
+    }
+    /* Descripción gris abajo (usando <code> en markdown sin fondo) */
+    div.stButton > button[kind="primary"] code {
+        background-color: transparent;
+        font-family: inherit;
+        font-size: 13px;
+        color: #6b7280;
+        padding: 0;
+        display: block;
+        white-space: normal;
+    }
+    div.stButton > button[kind="primary"]:hover {
+        background-color: #ffffff;
+        border-color: #13294B;
+        box-shadow: 0 8px 16px rgba(19, 41, 75, 0.12);
+        animation: rebotar 0.5s ease;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -37,102 +104,91 @@ if not st.session_state["sesion_iniciada"]:
 else:
     st.caption(f"👤 Usuario: **{st.session_state['nombre_completo']}** | 🏪 ID Tienda: **{st.session_state['id_tienda']}** | 🔑 ID Rol: **{st.session_state['id_rol']}**")
     
+    # --- VISTA 1: MENÚ PRINCIPAL ---
     if st.session_state["vista_actual"] == "menu_principal":
         st.markdown("<h2 style='text-align: center; margin-bottom: 30px;'>Red Cooperativa de Mujeres de Occidente</h2>", unsafe_allow_html=True)
         
         c1, c2, c3 = st.columns(3)
         with c1:
-            if st.button("📦\n\nGestión de Inventarios\n\nExistencias, lotes y stock mínimo por tienda", key="btn_inv"):
+            if st.button("*📦* **Gestión de Inventarios** `Existencias, lotes y stock mínimo por tienda`", key="btn_inv", type="primary"):
                 st.session_state["vista_actual"] = "inventario"
                 st.rerun()
         with c2:
-            if st.button("✏️\n\nCatálogos y Registros\n\nProductos, clientes, proveedores y categorías", key="btn_reg_info"):
+            if st.button("*✏️* **Catálogos y Registros** `Productos, clientes, proveedores y categorías`", key="btn_reg_info", type="primary"):
                 st.session_state["vista_actual"] = "registra_info"
                 st.rerun()
         with c3:
-            if st.button("💸\n\nCompras y Ventas\n\nRegistra entradas de compra y salidas de venta", key="btn_cv"):
+            if st.button("*💸* **Compras y Ventas** `Registra entradas de compra y salidas de venta`", key="btn_cv", type="primary"):
                 st.session_state["vista_actual"] = "compra_venta"
                 st.rerun()
 
         st.write("")
         espacio_izq, f1, f2, espacio_der = st.columns([0.5, 1, 1, 0.5])
         with f1:
-            if st.button("👑\n\nAdministración\n\nGestionar tiendas y cuentas de usuario", key="btn_admin"):
+            if st.button("*👑* **Administración** `Gestionar tiendas y cuentas de usuario`", key="btn_admin", type="primary"):
                 if st.session_state["id_rol"] == 1:
                     st.session_state["vista_actual"] = "administracion"
                     st.rerun()
                 else:
                     st.error("⛔ Acceso denegado. Solo el Administrador General puede gestionar cuentas.")
         with f2:
-            if st.button("📊\n\nReportes y Consultas\n\nMovimientos y reportes por tienda o globales", key="btn_rep"):
+            if st.button("*📊* **Reportes y Consultas** `Movimientos y reportes por tienda o globales`", key="btn_rep", type="primary"):
                 st.info("Módulo en construcción (Próxima fase).")
 
+    # --- VISTA 2: SUBMENÚ CATÁLOGOS Y REGISTROS ---
     elif st.session_state["vista_actual"] == "registra_info":
         st.markdown("<h3 style='text-align: center; margin-bottom: 25px;'>✏️ Catálogos y Registros</h3>", unsafe_allow_html=True)
         s1, s2, s3, s4 = st.columns(4)
         with s1:
-            if st.button("📦\n\nProductos\n\nAdministra el catálogo de productos", key="sub_prod"):
+            if st.button("*📦* **Productos** `Administra el catálogo de productos`", key="sub_prod", type="primary"):
                 st.session_state["vista_actual"] = "form_producto"
                 st.rerun()
         with s2:
-            if st.button("🤝\n\nClientes\n\nRegistra clientes de la tienda", key="sub_cli"):
+            if st.button("*🤝* **Clientes** `Registra clientes de la tienda`", key="sub_cli", type="primary"):
                 st.session_state["vista_actual"] = "form_cliente"
                 st.rerun()
         with s3:
-            if st.button("🚚\n\nProveedores\n\nRegistra proveedores de la tienda", key="sub_prov"):
+            if st.button("*🚚* **Proveedores** `Registra proveedores de la tienda`", key="sub_prov", type="primary"):
                 st.session_state["vista_actual"] = "form_proveedor"
                 st.rerun()
         with s4:
-            if st.button("📁\n\nCategorías\n\nClasificación común de productos", key="sub_cat"):
+            if st.button("*📁* **Categorías** `Clasificación común de productos`", key="sub_cat", type="primary"):
                 st.session_state["vista_actual"] = "form_categoria"
                 st.rerun()
 
+    # --- VISTA 3: SUBMENÚ COMPRAS Y VENTAS ---
     elif st.session_state["vista_actual"] == "compra_venta":
         st.markdown("<h3 style='text-align: center; margin-bottom: 25px;'>💸 Operaciones Comerciales</h3>", unsafe_allow_html=True)
         cv1, cv2 = st.columns(2)
         with cv1:
-            if st.button("🛍️\n\nRegistrar Venta\n\nSalida de productos a clientes o sucursales", key="sub_venta"):
+            if st.button("*🛍️* **Registrar Venta** `Salida de productos a clientes o sucursales`", key="sub_venta", type="primary"):
                 st.session_state["vista_actual"] = "form_venta"
                 st.rerun()
         with cv2:
-            if st.button("📥\n\nRegistrar Compra\n\nEntrada de mercadería de proveedores al inventario", key="sub_compra"):
+            if st.button("*📥* **Registrar Compra** `Entrada de mercadería de proveedores al inventario`", key="sub_compra", type="primary"):
                 st.session_state["vista_actual"] = "form_compra"
                 st.rerun()
 
+    # --- VISTAS DE FORMULARIOS ---
     elif st.session_state["vista_actual"] == "administracion":
-        st.markdown('<div class="boton-normal">', unsafe_allow_html=True)
         mostrar_registro()
-        st.markdown('</div>', unsafe_allow_html=True)
     elif st.session_state["vista_actual"] == "form_producto":
-        st.markdown('<div class="boton-normal">', unsafe_allow_html=True)
         mostrar_productos()
-        st.markdown('</div>', unsafe_allow_html=True)
     elif st.session_state["vista_actual"] == "form_cliente":
-        st.markdown('<div class="boton-normal">', unsafe_allow_html=True)
         mostrar_clientes()
-        st.markdown('</div>', unsafe_allow_html=True)
     elif st.session_state["vista_actual"] == "form_proveedor":
-        st.markdown('<div class="boton-normal">', unsafe_allow_html=True)
         mostrar_proveedores()
-        st.markdown('</div>', unsafe_allow_html=True)
     elif st.session_state["vista_actual"] == "form_categoria":
-        st.markdown('<div class="boton-normal">', unsafe_allow_html=True)
         mostrar_categorias()
-        st.markdown('</div>', unsafe_allow_html=True)
     elif st.session_state["vista_actual"] == "form_venta":
-        st.markdown('<div class="boton-normal">', unsafe_allow_html=True)
         mostrar_ventas()
-        st.markdown('</div>', unsafe_allow_html=True)
     elif st.session_state["vista_actual"] == "form_compra":
-        st.markdown('<div class="boton-normal">', unsafe_allow_html=True)
         mostrar_compras()
-        st.markdown('</div>', unsafe_allow_html=True)
     elif st.session_state["vista_actual"] == "inventario":
-        st.markdown('<div class="boton-normal">', unsafe_allow_html=True)
         mostrar_inventario()
-        st.markdown('</div>', unsafe_allow_html=True)
 
-    st.markdown('<div class="boton-normal"><br>', unsafe_allow_html=True)
+    # --- BOTONES INFERIORES DE NAVEGACIÓN (Todos compactos y azul marino) ---
+    st.markdown("<br>", unsafe_allow_html=True)
     formularios_catalogo = ["form_producto", "form_cliente", "form_proveedor", "form_categoria"]
     formularios_comerciales = ["form_venta", "form_compra"]
     
@@ -165,4 +221,3 @@ else:
         st.session_state["sesion_iniciada"] = False
         st.session_state["vista_actual"] = "menu_principal"
         st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
