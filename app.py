@@ -11,18 +11,72 @@ from modulos.inventario import mostrar_inventario
 
 st.set_page_config(page_title="Red Cooperativa de Mujeres de Occidente", layout="wide")
 
+# CSS que transforma los botones de las tarjetas en cuadros grandes interactivos
 st.markdown("""
     <style>
-    @keyframes flotar { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-5px); } }
-    @keyframes rebotar { 0%, 100% { transform: scale(1) translateY(0); } 40% { transform: scale(1.2) translateY(-10px); } 60% { transform: scale(1.1) translateY(-4px); } }
-    .tarjeta { background-color: #f8f9fa; border: 1px solid #e0e0e0; border-radius: 10px; padding: 25px 15px; text-align: center; margin-bottom: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.03); transition: transform 0.2s ease, box-shadow 0.2s ease; }
-    .tarjeta:hover { transform: translateY(-3px); box-shadow: 0 6px 12px rgba(0,0,0,0.08); border-color: #13294B; }
-    .emoji-grande { font-size: 42px; margin-bottom: 10px; display: inline-block; animation: flotar 3s ease-in-out infinite; }
-    .tarjeta:hover .emoji-grande { animation: rebotar 0.6s ease; }
-    .titulo-tarjeta { font-size: 18px; font-weight: bold; color: #1f2937; margin-bottom: 5px; }
-    .desc-tarjeta { font-size: 13px; color: #6b7280; margin-bottom: 15px; }
-    div.stButton > button { background-color: #13294B; color: white; width: 100%; border-radius: 6px; border: none; padding: 10px; font-weight: 500; }
-    div.stButton > button:hover { background-color: #1e3f73; color: white; }
+    @keyframes rebotar {
+        0%, 100% { transform: translateY(0); }
+        40% { transform: translateY(-8px); }
+        70% { transform: translateY(-3px); }
+    }
+    /* Estilo por defecto para botones normales (navegación inferior y formularios) */
+    div.stButton > button {
+        background-color: #13294B;
+        color: white;
+        width: 100%;
+        border-radius: 8px;
+        border: none;
+        padding: 10px 15px;
+        font-weight: 500;
+        transition: all 0.2s ease;
+    }
+    div.stButton > button:hover {
+        background-color: #1e3f73;
+        color: white;
+    }
+    /* Transformar en TARJETA GRANDE cualquier botón dentro de las columnas del menú */
+    div[data-testid="stHorizontalBlock"] div.stButton > button {
+        background-color: #f8f9fa;
+        color: #1f2937;
+        border: 1px solid #e0e0e0;
+        border-radius: 12px;
+        padding: 28px 15px;
+        min-height: 175px;
+        white-space: pre-line;
+        line-height: 1.5;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.04);
+    }
+    /* Primera línea del texto del botón (el Emoji) se hace grande */
+    div[data-testid="stHorizontalBlock"] div.stButton > button p {
+        font-size: 14px;
+        color: #6b7280;
+    }
+    div[data-testid="stHorizontalBlock"] div.stButton > button p::first-line {
+        font-size: 38px;
+        font-weight: bold;
+        color: #13294B;
+    }
+    /* Efecto rebote y elevación al pasar el cursor sobre la tarjeta */
+    div[data-testid="stHorizontalBlock"] div.stButton > button:hover {
+        background-color: #ffffff;
+        border-color: #13294B;
+        box-shadow: 0 8px 16px rgba(19, 41, 75, 0.12);
+        animation: rebotar 0.5s ease;
+    }
+    /* Excepción para los botones de navegación inferiores (que sigan siendo azul marino) */
+    .nav-inferior div.stButton > button {
+        background-color: #13294B !important;
+        color: white !important;
+        min-height: 42px !important;
+        padding: 10px !important;
+        animation: none !important;
+    }
+    .nav-inferior div.stButton > button p,
+    .nav-inferior div.stButton > button p::first-line {
+        font-size: 15px !important;
+        color: white !important;
+        font-weight: 500 !important;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -34,83 +88,74 @@ if "vista_actual" not in st.session_state:
 if not st.session_state["sesion_iniciada"]:
     login()
 else:
-    col_info1, col_info2 = st.columns([4, 1])
-    with col_info1:
-        st.caption(f"👤 Usuario: **{st.session_state['nombre_completo']}** | 🏪 ID Tienda: **{st.session_state['id_tienda']}** | 🔑 ID Rol: **{st.session_state['id_rol']}**")
+    st.caption(f"👤 Usuario: **{st.session_state['nombre_completo']}** | 🏪 ID Tienda: **{st.session_state['id_tienda']}** | 🔑 ID Rol: **{st.session_state['id_rol']}**")
     
+    # --- VISTA 1: MENÚ PRINCIPAL (Tarjetas completas presionables) ---
     if st.session_state["vista_actual"] == "menu_principal":
         st.markdown("<h2 style='text-align: center; margin-bottom: 30px;'>Red Cooperativa de Mujeres de Occidente</h2>", unsafe_allow_html=True)
         
         c1, c2, c3 = st.columns(3)
         with c1:
-            st.markdown('<div class="tarjeta"><div class="emoji-grande">📦</div><div class="titulo-tarjeta">Gestión de Inventarios</div><div class="desc-tarjeta">Existencias, lotes y stock mínimo por tienda</div></div>', unsafe_allow_html=True)
-            if st.button("📋 Ver inventario", key="btn_inv"):
+            if st.button("📦\n**Gestión de Inventarios**\nExistencias, lotes y stock mínimo por tienda", key="btn_inv"):
                 st.session_state["vista_actual"] = "inventario"
                 st.rerun()
         with c2:
-            st.markdown('<div class="tarjeta"><div class="emoji-grande">✏️</div><div class="titulo-tarjeta">Catálogos y Registros</div><div class="desc-tarjeta">Productos, clientes, proveedores y categorías</div></div>', unsafe_allow_html=True)
-            if st.button("📝 Gestionar catálogos", key="btn_reg_info"):
+            if st.button("✏️\n**Catálogos y Registros**\nProductos, clientes, proveedores y categorías", key="btn_reg_info"):
                 st.session_state["vista_actual"] = "registra_info"
                 st.rerun()
         with c3:
-            st.markdown('<div class="tarjeta"><div class="emoji-grande">💸</div><div class="titulo-tarjeta">Compras y Ventas</div><div class="desc-tarjeta">Registra entradas de compra y salidas de venta</div></div>', unsafe_allow_html=True)
-            if st.button("🛒 Comprar / Vender", key="btn_cv"):
+            if st.button("💸\n**Compras y Ventas**\nRegistra entradas de compra y salidas de venta", key="btn_cv"):
                 st.session_state["vista_actual"] = "compra_venta"
                 st.rerun()
 
         st.write("")
         espacio_izq, f1, f2, espacio_der = st.columns([0.5, 1, 1, 0.5])
         with f1:
-            st.markdown('<div class="tarjeta"><div class="emoji-grande">👑</div><div class="titulo-tarjeta">Administración</div><div class="desc-tarjeta">Gestionar tiendas y cuentas de usuario</div></div>', unsafe_allow_html=True)
-            if st.button("⚙️ Gestionar", key="btn_admin"):
+            if st.button("👑\n**Administración**\nGestionar tiendas y cuentas de usuario", key="btn_admin"):
                 if st.session_state["id_rol"] == 1:
                     st.session_state["vista_actual"] = "administracion"
                     st.rerun()
                 else:
                     st.error("⛔ Acceso denegado. Solo el Administrador General puede gestionar cuentas.")
         with f2:
-            st.markdown('<div class="tarjeta"><div class="emoji-grande">📊</div><div class="titulo-tarjeta">Reportes y Consultas</div><div class="desc-tarjeta">Movimientos y reportes por tienda o globales</div></div>', unsafe_allow_html=True)
-            if st.button("📑 Ver reportes", key="btn_rep"):
+            if st.button("📊\n**Reportes y Consultas**\nMovimientos y reportes por tienda o globales", key="btn_rep"):
                 st.info("Módulo en construcción (Próxima fase).")
 
+    # --- VISTA 2: SUBMENÚ CATÁLOGOS Y REGISTROS ---
     elif st.session_state["vista_actual"] == "registra_info":
         st.markdown("<h3 style='text-align: center; margin-bottom: 25px;'>✏️ Catálogos y Registros</h3>", unsafe_allow_html=True)
         s1, s2, s3, s4 = st.columns(4)
         with s1:
-            st.markdown('<div class="tarjeta"><div class="emoji-grande">📦</div><div class="titulo-tarjeta">Productos</div><div class="desc-tarjeta">Administra el catálogo de productos</div></div>', unsafe_allow_html=True)
-            if st.button("Agregar Producto", key="sub_prod"):
+            if st.button("📦\n**Productos**\nAdministra el catálogo de productos", key="sub_prod"):
                 st.session_state["vista_actual"] = "form_producto"
                 st.rerun()
         with s2:
-            st.markdown('<div class="tarjeta"><div class="emoji-grande">🤝</div><div class="titulo-tarjeta">Clientes</div><div class="desc-tarjeta">Registra clientes de la tienda</div></div>', unsafe_allow_html=True)
-            if st.button("Agregar Cliente", key="sub_cli"):
+            if st.button("🤝\n**Clientes**\nRegistra clientes de la tienda", key="sub_cli"):
                 st.session_state["vista_actual"] = "form_cliente"
                 st.rerun()
         with s3:
-            st.markdown('<div class="tarjeta"><div class="emoji-grande">🚚</div><div class="titulo-tarjeta">Proveedores</div><div class="desc-tarjeta">Registra proveedores de la tienda</div></div>', unsafe_allow_html=True)
-            if st.button("Agregar Proveedor", key="sub_prov"):
+            if st.button("🚚\n**Proveedores**\nRegistra proveedores de la tienda", key="sub_prov"):
                 st.session_state["vista_actual"] = "form_proveedor"
                 st.rerun()
         with s4:
-            st.markdown('<div class="tarjeta"><div class="emoji-grande">📁</div><div class="titulo-tarjeta">Categorías</div><div class="desc-tarjeta">Clasificación común de productos</div></div>', unsafe_allow_html=True)
-            if st.button("Gestionar Categorías", key="sub_cat"):
+            if st.button("📁\n**Categorías**\nClasificación común de productos", key="sub_cat"):
                 st.session_state["vista_actual"] = "form_categoria"
                 st.rerun()
 
+    # --- VISTA 3: SUBMENÚ COMPRAS Y VENTAS ---
     elif st.session_state["vista_actual"] == "compra_venta":
         st.markdown("<h3 style='text-align: center; margin-bottom: 25px;'>💸 Operaciones Comerciales</h3>", unsafe_allow_html=True)
         cv1, cv2 = st.columns(2)
         with cv1:
-            st.markdown('<div class="tarjeta"><div class="emoji-grande">🛍️</div><div class="titulo-tarjeta">Registrar Venta</div><div class="desc-tarjeta">Salida de productos a clientes o sucursales</div></div>', unsafe_allow_html=True)
-            if st.button("Ir a Ventas", key="sub_venta"):
+            if st.button("🛍️\n**Registrar Venta**\nSalida de productos a clientes o sucursales", key="sub_venta"):
                 st.session_state["vista_actual"] = "form_venta"
                 st.rerun()
         with cv2:
-            st.markdown('<div class="tarjeta"><div class="emoji-grande">📥</div><div class="titulo-tarjeta">Registrar Compra</div><div class="desc-tarjeta">Entrada de mercadería de proveedores al inventario</div></div>', unsafe_allow_html=True)
-            if st.button("Ir a Compras", key="sub_compra"):
+            if st.button("📥\n**Registrar Compra**\nEntrada de mercadería de proveedores al inventario", key="sub_compra"):
                 st.session_state["vista_actual"] = "form_compra"
                 st.rerun()
 
+    # --- VISTAS DE FORMULARIOS ---
     elif st.session_state["vista_actual"] == "administracion":
         mostrar_registro()
     elif st.session_state["vista_actual"] == "form_producto":
@@ -128,7 +173,8 @@ else:
     elif st.session_state["vista_actual"] == "inventario":
         mostrar_inventario()
 
-    st.markdown("<br>", unsafe_allow_html=True)
+    # --- BOTONES INFERIORES DE NAVEGACIÓN ---
+    st.markdown('<div class="nav-inferior"><br>', unsafe_allow_html=True)
     formularios_catalogo = ["form_producto", "form_cliente", "form_proveedor", "form_categoria"]
     formularios_comerciales = ["form_venta", "form_compra"]
     
@@ -160,3 +206,5 @@ else:
     if st.button("🚪 Cerrar sesión"):
         st.session_state["sesion_iniciada"] = False
         st.session_state["vista_actual"] = "menu_principal"
+        st.rerun()
+    st.markdown('</div>', unsafe_allow_html=True)
