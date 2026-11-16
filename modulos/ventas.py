@@ -7,7 +7,6 @@ def obtener_clientes_registrados():
         return []
     try:
         cursor = conexion.cursor(dictionary=True)
-        # Excluimos el id_cliente = 1 ('Externo') porque ese se usa automático en venta rápida
         cursor.execute("SELECT id_cliente, Nombre, Tipo FROM Cliente WHERE id_cliente != 1 ORDER BY Nombre")
         return cursor.fetchall()
     finally:
@@ -20,7 +19,6 @@ def obtener_productos_disponibles(id_tienda):
         return []
     try:
         cursor = conexion.cursor(dictionary=True)
-        # Traemos productos que tengan existencia mayor a 0 en la tienda del usuario actual
         consulta = """
             SELECT i.id_inventario, p.id_producto, p.Nombre, p.Unidad_medida, p.Codigo_barras,
                    i.Existencia, i.Precio_venta
@@ -43,7 +41,6 @@ def registrar_venta_completa(id_tienda, id_usuario, id_cliente, carrito, total_v
     try:
         cursor = conexion.cursor()
         
-        # 1. Insertar el encabezado en la tabla Venta
         sql_venta = """
             INSERT INTO Venta (id_tienda, id_usuario, id_cliente, Total)
             VALUES (%s, %s, %s, %s)
@@ -51,9 +48,7 @@ def registrar_venta_completa(id_tienda, id_usuario, id_cliente, carrito, total_v
         cursor.execute(sql_venta, (id_tienda, id_usuario, id_cliente, total_venta))
         id_venta_generado = cursor.lastrowid
         
-        # 2. Recorrer cada producto del carrito para guardar Detalle_venta y descontar Inventario
         for item in carrito:
-            # Insertar en Detalle_venta
             sql_detalle = """
                 INSERT INTO Detalle_venta (id_venta, Cantidad, Precio_unitario)
                 VALUES (%s, %s, %s)
@@ -61,7 +56,6 @@ def registrar_venta_completa(id_tienda, id_usuario, id_cliente, carrito, total_v
             cursor.execute(sql_detalle, (id_venta_generado, item["cantidad"], item["precio"]))
             id_detalle_generado = cursor.lastrowid
             
-            # Actualizar la existencia en Inventario y enlazar el último id_detalle_venta
             sql_inv = """
                 UPDATE Inventario 
                 SET Existencia = Existencia - %s, id_detalle_venta = %s
@@ -92,20 +86,23 @@ def mostrar_ventas():
     id_tienda = st.session_state.get("id_tienda")
     id_usuario = st.session_state.get("id_usuario")
     
-    # Inicializar carrito en sesión
+    if st.session_state.get("limpiar_campos_venta", False):
+        st.session_state["venta_req_factura"] = False
+        st.session_state["limpiar_campos_venta"] = False
+
     if "carrito_ventas" not in st.session_state:
         st.session_state["carrito_ventas"] = []
+    if "venta_req_factura" not in st.session_state:
+        st.session_state["venta_req_factura"] = False
 
-    # Mostrar mensaje de confirmación tras una venta exitosa
     if st.session_state.get("msg_exito_venta"):
         st.success(st.session_state["msg_exito_venta"])
         st.session_state["msg_exito_venta"] = ""
 
-    # --- SECCIÓN 1: IDENTIFICACIÓN DEL CLIENTE (Lógica Súper Selectos) ---
-    st.subheader("1. Datos del Comprador")
-    requiere_factura = st.checkbox("🧾 El cliente requiere factura con nombre / datos (o es venta a sucursal)")
+    st.subheader("Datos del Comprador")
+    requiere_factura = st.checkbox("🧾 El cliente requiere factura con nombre / datos (o es venta a sucursal)", key="venta_req_factura")
     
-    id_cliente_final = 1  # Por defecto: 1 = 'Externo' (Consumidor Final rápido)
+    id_cliente_final = 1
     if requiere_factura:
         clientes = obtener_clientes_registrados()
         if not clientes:
@@ -123,8 +120,7 @@ def mostrar_ventas():
 
     st.divider()
 
-    # --- SECCIÓN 2: SELECCIÓN DE PRODUCTOS ---
-    st.subheader("2. Agregar Productos al Carrito")
+    st.subheader("Agregar Productos al Carrito")
     productos_disp = obtener_productos_disponibles(id_tienda)
     
     if not productos_disp:
@@ -142,9 +138,9 @@ def mostrar_ventas():
         max_cant = int(prod_sel["Existencia"])
         cantidad = st.number_input("Cantidad", min_value=1, max_value=max_cant, value=1, step=1)
     with col_p3:
-        st.markdown("<br>", unsafe_allow_html=True)
+        st.write("")
+        st.write("")
         if st.button("➕ Agregar"):
-            # Verificar si el producto ya está en el carrito para sumar cantidades
             encontrado = False
             for item in st.session_state["carrito_ventas"]:
                 if item["id_inventario"] == prod_sel["id_inventario"]:
@@ -169,14 +165,13 @@ def mostrar_ventas():
                 })
             st.rerun()
 
-    # --- SECCIÓN 3: RESUMEN DEL CARRITO Y COBRO ---
     if st.session_state["carrito_ventas"]:
         st.divider()
-        st.subheader("3. Detalle de la Venta")
+        st.subheader("Detalle de la Venta")
         
         total_general = 0.0
         for idx, item in enumerate(st.session_state["carrito_ventas"]):
-            c_item1, c_item2, c_item3, c_item4, c_item5 = st.columns([3, 1, 1, 1, 1])
+            c_item1, c_item2, c_item3, c_item4, c_item5 = st.columns([3, 1, 1.5, 1.5, 0.8])
             c_item1.write(f"**{item['nombre']}** ({item['unidad']})")
             c_item2.write(f"Cant: {item['cantidad']}")
             c_item3.write(f"${item['precio']:.2f} c/u")
@@ -192,6 +187,7 @@ def mostrar_ventas():
         with col_btn1:
             if st.button("🧹 Vaciar Carrito"):
                 st.session_state["carrito_ventas"] = []
+                st.session_state["limpiar_campos_venta"] = True
                 st.rerun()
         with col_btn2:
             if st.button("💳 Confirmar y Cobrar Venta"):
@@ -205,6 +201,7 @@ def mostrar_ventas():
                 if exito:
                     st.session_state["carrito_ventas"] = []
                     st.session_state["msg_exito_venta"] = mensaje
+                    st.session_state["limpiar_campos_venta"] = True
                     st.rerun()
                 else:
                     st.error(mensaje)
