@@ -155,7 +155,7 @@ def mostrar_compras():
     # Cálculo técnico de Punto de Reorden (Stock Mínimo = Demanda diaria * Lead Time)
     demanda_diaria = demanda_mensual / 30.0
     stock_min_calculado = max(1, math.ceil(demanda_diaria * lead_time))
-    st.caption(f"📐 **Punto de Reorden calculado (PCO):** `{stock_min_calculado}` unidad(es) — *(Demanda diaria: {demanda_diaria:.2f} × Lead Time: {lead_time} días)*")
+    st.caption(f"📐 **Punto de Reorden calculado:** `{stock_min_calculado}` unidad(es) — *(Demanda diaria: {demanda_diaria:.2f} × Lead Time: {lead_time} días)*")
 
     tiene_vencimiento = st.checkbox("📅 Este lote tiene fecha de vencimiento", key="comp_venc_chk_0")
     fecha_venc = st.date_input("Fecha de Vencimiento", min_value=date.today()) if tiene_vencimiento else None
