@@ -1,4 +1,5 @@
 import streamlit as st
+import math
 from datetime import date
 from config.conexion import obtener_conexion
 
@@ -51,9 +52,19 @@ def registrar_compra_completa(id_tienda, id_usuario, id_proveedor, carrito, tota
             inv = cur.fetchone()
             
             if inv:
-                cur.execute("UPDATE Inventario SET Existencia = Existencia + %s, Precio_venta = %s, id_detalle_compra = %s WHERE id_inventario = %s", (item["cantidad"], item["precio_venta"], id_det_gen, inv["id_inventario"]))
+                cur.execute("""
+                    UPDATE Inventario 
+                    SET Existencia = Existencia + %s, 
+                        Stock_minimo = %s,
+                        Precio_venta = %s, 
+                        id_detalle_compra = %s 
+                    WHERE id_inventario = %s
+                """, (item["cantidad"], item["stock_minimo"], item["precio_venta"], id_det_gen, inv["id_inventario"]))
             else:
-                cur.execute("INSERT INTO Inventario (id_tienda, id_producto, id_detalle_compra, Existencia, Stock_minimo, Precio_venta) VALUES (%s, %s, %s, %s, 5, %s)", (id_tienda, item["id_producto"], id_det_gen, item["cantidad"], item["precio_venta"]))
+                cur.execute("""
+                    INSERT INTO Inventario (id_tienda, id_producto, id_detalle_compra, Existencia, Stock_minimo, Precio_venta) 
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                """, (id_tienda, item["id_producto"], id_det_gen, item["cantidad"], item["stock_minimo"], item["precio_venta"]))
                 
         cx.commit()
         return True, f"✅ Compra #{id_compra_gen} registrada e inventario actualizado (${total_compra:.2f})."
@@ -76,6 +87,8 @@ def mostrar_compras():
         st.session_state["reset_prod_comp"] += 1
         st.session_state["comp_cant_0"] = 0
         st.session_state["comp_costo_0"] = 0.00
+        st.session_state["comp_lead_0"] = 1
+        st.session_state["comp_dem_0"] = 15
         st.session_state["comp_venc_chk_0"] = False
         st.session_state["limpiar_item_compra"] = False
 
@@ -84,12 +97,16 @@ def mostrar_compras():
         st.session_state["reset_prod_comp"] += 1
         st.session_state["comp_cant_0"] = 0
         st.session_state["comp_costo_0"] = 0.00
+        st.session_state["comp_lead_0"] = 1
+        st.session_state["comp_dem_0"] = 15
         st.session_state["comp_venc_chk_0"] = False
         st.session_state["limpiar_todo_compra"] = False
 
     if "carrito_compras" not in st.session_state: st.session_state["carrito_compras"] = []
     if "comp_cant_0" not in st.session_state: st.session_state["comp_cant_0"] = 0
     if "comp_costo_0" not in st.session_state: st.session_state["comp_costo_0"] = 0.00
+    if "comp_lead_0" not in st.session_state: st.session_state["comp_lead_0"] = 1
+    if "comp_dem_0" not in st.session_state: st.session_state["comp_dem_0"] = 15
     if "comp_venc_chk_0" not in st.session_state: st.session_state["comp_venc_chk_0"] = False
         
     if st.session_state.get("msg_exito_compra"):
@@ -127,10 +144,18 @@ def mostrar_compras():
             key=f"sel_prod_comp_{st.session_state['reset_prod_comp']}"
         )
         cantidad = st.number_input("Cantidad recibida", min_value=0, step=1, key="comp_cant_0")
+        lead_time = st.number_input("Lead Time del Proveedor (días de entrega)", min_value=1, max_value=90, step=1, key="comp_lead_0")
+        
     with c2:
         precio_compra = st.number_input("Precio de Compra Unitario ($)", min_value=0.00, step=0.05, format="%.2f", key="comp_costo_0")
         precio_sugerido = round(precio_compra * 1.20, 2)
         st.number_input("Precio de Venta Sugerido (+20%)", value=precio_sugerido, format="%.2f", disabled=True)
+        demanda_mensual = st.number_input("Demanda Estimada Mensual (unidades/mes)", min_value=1, step=1, key="comp_dem_0")
+
+    # Cálculo técnico de Punto de Reorden (Stock Mínimo = Demanda diaria * Lead Time)
+    demanda_diaria = demanda_mensual / 30.0
+    stock_min_calculado = max(1, math.ceil(demanda_diaria * lead_time))
+    st.caption(f"📐 **Punto de Reorden calculado (PCO):** `{stock_min_calculado}` unidad(es) — *(Demanda diaria: {demanda_diaria:.2f} × Lead Time: {lead_time} días)*")
 
     tiene_vencimiento = st.checkbox("📅 Este lote tiene fecha de vencimiento", key="comp_venc_chk_0")
     fecha_venc = st.date_input("Fecha de Vencimiento", min_value=date.today()) if tiene_vencimiento else None
@@ -152,6 +177,7 @@ def mostrar_compras():
                 "cantidad": cantidad,
                 "precio_compra": precio_compra,
                 "precio_venta": precio_sugerido,
+                "stock_minimo": stock_min_calculado,
                 "fecha_venc": fecha_venc,
                 "subtotal": cantidad * precio_compra
             })
@@ -164,8 +190,8 @@ def mostrar_compras():
         total_compra = 0.0
         
         for idx, item in enumerate(st.session_state["carrito_compras"]):
-            col1, col2, col3, col4, col5 = st.columns([3, 1.5, 1.5, 1.5, 0.8])
-            col1.write(f"**{item['nombre']}** ({item['unidad']})")
+            col1, col2, col3, col4, col5 = st.columns([3, 1.2, 1.5, 1.5, 0.8])
+            col1.write(f"**{item['nombre']}** ({item['unidad']}) · *ROP: {item['stock_minimo']}*")
             col2.write(f"Cant: {item['cantidad']}")
             col3.write(f"Costo: ${item['precio_compra']:.2f}")
             col4.write(f"Sugerido: ${item['precio_venta']:.2f}")
