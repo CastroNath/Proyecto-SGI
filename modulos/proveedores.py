@@ -19,7 +19,7 @@ def fmt_tel(k):
 
 def validar_datos(nombre, tipo_doc, raw_doc, raw_tel):
     if not nombre.strip():
-        return False, "⚠️ El nombre completo es obligatorio.", None, None
+        return False, "⚠️ El nombre completo o razón social es obligatorio.", None, None
     nd = "".join(filter(str.isdigit, raw_doc))
     nt = "".join(filter(str.isdigit, raw_tel))
     if tipo_doc == "DUI" and len(nd) != 9:
@@ -48,7 +48,7 @@ def mostrar_proveedores():
         for k, v in [("p_nom", ""), ("p_tipo", "Persona Natural"), ("p_rad", "Ninguno"), ("p_dui", ""), ("p_nit", ""), ("p_tel", "")]:
             if k not in st.session_state: st.session_state[k] = v
 
-        nom = st.text_input("Nombre Completo", key="p_nom")
+        nom = st.text_input("Nombre Completo o Razón Social", key="p_nom")
         tipo = st.selectbox("Tipo de Proveedor", ["Persona Natural", "Empresa", "Cooperativa"], key="p_tipo")
         opc = ["Ninguno", "DUI"] if tipo == "Persona Natural" else ["Ninguno", "NIT"]
         if st.session_state["p_rad"] not in opc: st.session_state["p_rad"] = "Ninguno"
@@ -84,6 +84,13 @@ def mostrar_proveedores():
                         cur.close(); cx.close()
 
     with tab2:
+        if st.session_state.get("limpiar_ed_prov", False):
+            st.session_state["sel_ed_p"] = None
+            st.session_state["last_ed_id"] = None
+            for k, v in [("ed_nom", ""), ("ed_tipo", "Persona Natural"), ("ed_rad", "Ninguno"), ("ed_dui", ""), ("ed_nit", ""), ("ed_tel", "")]:
+                st.session_state[k] = v
+            st.session_state["limpiar_ed_prov"] = False
+
         if st.session_state.get("ok_edit_p"):
             st.success(st.session_state.pop("ok_edit_p"))
 
@@ -92,7 +99,7 @@ def mostrar_proveedores():
         if cx:
             try:
                 cur = cx.cursor(dictionary=True)
-                cur.execute("SELECT id_proveedor, Nombre, Tipo, DUI_NIT, Telefono FROM Proveedor ORDER BY Nombre")
+                cur.execute("SELECT id_proveedor, Nombre, Tipo, DUI_NIT, Telefono FROM Proveedor ORDER BY id_proveedor ASC")
                 provs = cur.fetchall()
             finally:
                 cur.close(); cx.close()
@@ -106,34 +113,45 @@ def mostrar_proveedores():
         st.divider()
         st.subheader("✏️ Editar Información")
 
-        sel = st.selectbox("Selecciona el proveedor a modificar", provs, format_func=lambda x: f"{x['Nombre']} ({x['Tipo']})", key="sel_ed_p")
-        pid = sel["id_proveedor"]
+        opciones_ed = [None] + provs
+        sel = st.selectbox(
+            "Selecciona el proveedor a modificar",
+            opciones_ed,
+            format_func=lambda x: "-- Selecciona un proveedor --" if x is None else f"{x['id_proveedor']} - {x['Nombre']} ({x['Tipo']})",
+            key="sel_ed_p"
+        )
 
-        if st.session_state.get("last_ed_id") != pid:
-            st.session_state["last_ed_id"] = pid
-            st.session_state["ed_nom"] = sel["Nombre"]
-            st.session_state["ed_tipo"] = sel["Tipo"] if sel["Tipo"] in ["Persona Natural", "Empresa", "Cooperativa"] else "Empresa"
-            doc_bd = sel["DUI_NIT"] or ""
-            st.session_state["ed_rad"] = "DUI" if len(doc_bd) == 10 else ("NIT" if len(doc_bd) == 17 else "Ninguno")
-            st.session_state["ed_dui"] = doc_bd if len(doc_bd) == 10 else ""
-            st.session_state["ed_nit"] = doc_bd if len(doc_bd) == 17 else ""
-            st.session_state["ed_tel"] = sel["Telefono"] or ""
+        if sel is None:
+            st.session_state["last_ed_id"] = None
+            for k, v in [("ed_nom", ""), ("ed_tipo", "Persona Natural"), ("ed_rad", "Ninguno"), ("ed_dui", ""), ("ed_nit", ""), ("ed_tel", "")]:
+                st.session_state[k] = v
+        else:
+            pid = sel["id_proveedor"]
+            if st.session_state.get("last_ed_id") != pid:
+                st.session_state["last_ed_id"] = pid
+                st.session_state["ed_nom"] = sel["Nombre"]
+                st.session_state["ed_tipo"] = sel["Tipo"] if sel["Tipo"] in ["Persona Natural", "Empresa", "Cooperativa"] else "Empresa"
+                doc_bd = sel["DUI_NIT"] or ""
+                st.session_state["ed_rad"] = "DUI" if len(doc_bd) == 10 else ("NIT" if len(doc_bd) == 17 else "Ninguno")
+                st.session_state["ed_dui"] = doc_bd if len(doc_bd) == 10 else ""
+                st.session_state["ed_nit"] = doc_bd if len(doc_bd) == 17 else ""
+                st.session_state["ed_tel"] = sel["Telefono"] or ""
 
-        enom = st.text_input("Nombre Completo", key="ed_nom")
-        etipo = st.selectbox("Tipo de Proveedor", ["Persona Natural", "Empresa", "Cooperativa"], key="ed_tipo")
+        enom = st.text_input("Nombre Completo o Razón Social", key="ed_nom", disabled=(sel is None))
+        etipo = st.selectbox("Tipo de Proveedor", ["Persona Natural", "Empresa", "Cooperativa"], key="ed_tipo", disabled=(sel is None))
         eopc = ["Ninguno", "DUI"] if etipo == "Persona Natural" else ["Ninguno", "NIT"]
         if st.session_state.get("ed_rad") not in eopc: st.session_state["ed_rad"] = "Ninguno"
-        etdoc = st.radio("Documento de Identificación", eopc, horizontal=True, key="ed_rad")
+        etdoc = st.radio("Documento de Identificación", eopc, horizontal=True, key="ed_rad", disabled=(sel is None))
 
         eraw_doc = ""
         if etdoc == "DUI":
-            eraw_doc = st.text_input("Número de DUI", max_chars=10 if "-" in st.session_state["ed_dui"] else 9, placeholder="00000000-0", key="ed_dui", on_change=fmt_dui, args=("ed_dui",))
+            eraw_doc = st.text_input("Número de DUI", max_chars=10 if "-" in st.session_state["ed_dui"] else 9, placeholder="00000000-0", key="ed_dui", on_change=fmt_dui, args=("ed_dui",), disabled=(sel is None))
         elif etdoc == "NIT":
-            eraw_doc = st.text_input("Número de NIT", max_chars=17 if "-" in st.session_state["ed_nit"] else 14, placeholder="0000-000000-000-0", key="ed_nit", on_change=fmt_nit, args=("ed_nit",))
+            eraw_doc = st.text_input("Número de NIT", max_chars=17 if "-" in st.session_state["ed_nit"] else 14, placeholder="0000-000000-000-0", key="ed_nit", on_change=fmt_nit, args=("ed_nit",), disabled=(sel is None))
 
-        eraw_tel = st.text_input("Teléfono", max_chars=9 if "-" in st.session_state["ed_tel"] else 8, placeholder="0000-0000", key="ed_tel", on_change=fmt_tel, args=("ed_tel",))
+        eraw_tel = st.text_input("Teléfono", max_chars=9 if "-" in st.session_state["ed_tel"] else 8, placeholder="0000-0000", key="ed_tel", on_change=fmt_tel, args=("ed_tel",), disabled=(sel is None))
 
-        if st.button("💾 Actualizar Proveedor", key="btn_upd_p"):
+        if st.button("💾 Actualizar Proveedor", key="btn_upd_p", disabled=(sel is None)):
             valido, err, doc_f, tel_f = validar_datos(enom, etdoc, eraw_doc, eraw_tel)
             if not valido:
                 st.error(err)
@@ -142,10 +160,10 @@ def mostrar_proveedores():
                 if cx:
                     try:
                         cur = cx.cursor()
-                        cur.execute("UPDATE Proveedor SET Nombre=%s, Tipo=%s, DUI_NIT=%s, Telefono=%s WHERE id_proveedor=%s", (enom.strip(), etipo, doc_f, tel_f, pid))
+                        cur.execute("UPDATE Proveedor SET Nombre=%s, Tipo=%s, DUI_NIT=%s, Telefono=%s WHERE id_proveedor=%s", (enom.strip(), etipo, doc_f, tel_f, sel["id_proveedor"]))
                         cx.commit()
                         st.session_state["ok_edit_p"] = f"✅ Datos de '{enom.strip()}' actualizados."
-                        st.session_state["last_ed_id"] = None
+                        st.session_state["limpiar_ed_prov"] = True
                         st.rerun()
                     except mysql.connector.IntegrityError as e:
                         st.error("❌ El documento o teléfono ya pertenece a otro proveedor." if ("DUI_NIT" in str(e) or "Telefono" in str(e)) else "❌ Error de duplicidad.")
