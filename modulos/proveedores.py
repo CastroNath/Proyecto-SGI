@@ -63,14 +63,15 @@ def mostrar_proveedores():
         st.session_state["input_tel"] = ""
 
     # 4. Dibujar los campos del formulario
-    nombre = st.text_input("Nombre o Razón Social", key="input_nombre_prov")
+    nombre = st.text_input("Nombre Completo", key="input_nombre_prov")
     tipo = st.selectbox(
         "Tipo de Proveedor", 
-        ["Persona Natural", "Empresa", "Cooperativa", "Otro"],
+        ["Persona Natural", "Empresa", "Cooperativa"],
         key="input_tipo_prov"
     )
     
-    opciones_doc = ["Ninguno", "DUI", "NIT"] if tipo == "Persona Natural" else ["Ninguno", "NIT"]
+    # Regla de negocio: Persona Natural solo lleva DUI (opcional); Empresa o Cooperativa llevan NIT (opcional)
+    opciones_doc = ["Ninguno", "DUI"] if tipo == "Persona Natural" else ["Ninguno", "NIT"]
     if st.session_state["input_doc_radio"] not in opciones_doc:
         st.session_state["input_doc_radio"] = "Ninguno"
         
@@ -117,7 +118,7 @@ def mostrar_proveedores():
     # 5. Guardar en la base de datos con validación de duplicados
     if st.button("Guardar Proveedor"):
         if not nombre.strip():
-            st.warning("⚠️ El nombre del proveedor es obligatorio.")
+            st.warning("⚠️ El nombre completo del proveedor es obligatorio.")
             return
             
         num_doc = "".join(filter(str.isdigit, dui_nit_raw))
