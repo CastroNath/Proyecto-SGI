@@ -3,160 +3,94 @@ from datetime import date
 from config.conexion import obtener_conexion
 
 def obtener_proveedores(id_tienda_actual):
-    conexion = obtener_conexion()
-    if not conexion:
-        return []
+    cx = obtener_conexion()
+    if not cx: return []
     try:
-        cursor = conexion.cursor(dictionary=True)
-        cursor.execute("SELECT Nombre, Tipo FROM Tienda WHERE id_tienda = %s", (id_tienda_actual,))
-        tienda_actual = cursor.fetchone()
-        
-        es_cd = False
-        if tienda_actual:
-            nombre_t = (tienda_actual["Nombre"] or "").lower()
-            tipo_t = (tienda_actual["Tipo"] or "").lower()
-            if "distribuci" in nombre_t or "distribuci" in tipo_t:
-                es_cd = True
-
+        cur = cx.cursor(dictionary=True)
+        cur.execute("SELECT Nombre, Tipo FROM Tienda WHERE id_tienda = %s", (id_tienda_actual,))
+        t = cur.fetchone()
+        es_cd = t and ("distribuci" in (t["Nombre"] or "").lower() or "distribuci" in (t["Tipo"] or "").lower())
         if es_cd:
-            cursor.execute("SELECT id_proveedor, Nombre, Tipo FROM Proveedor WHERE LOWER(Nombre) NOT LIKE '%distribuci%' ORDER BY Nombre")
+            cur.execute("SELECT id_proveedor, Nombre, Tipo FROM Proveedor WHERE LOWER(Nombre) NOT LIKE '%distribuci%' ORDER BY Nombre")
         else:
-            cursor.execute("SELECT id_proveedor, Nombre, Tipo FROM Proveedor ORDER BY Nombre")
-            
-        return cursor.fetchall()
+            cur.execute("SELECT id_proveedor, Nombre, Tipo FROM Proveedor ORDER BY Nombre")
+        return cur.fetchall()
     finally:
-        cursor.close()
-        conexion.close()
+        cur.close(); cx.close()
 
 def obtener_productos_catalogo():
-    conexion = obtener_conexion()
-    if not conexion:
-        return []
+    cx = obtener_conexion()
+    if not cx: return []
     try:
-        cursor = conexion.cursor(dictionary=True)
-        cursor.execute("SELECT id_producto, Nombre, Unidad_medida, Codigo_barras FROM Producto ORDER BY Nombre")
-        return cursor.fetchall()
+        cur = cx.cursor(dictionary=True)
+        cur.execute("SELECT id_producto, Nombre, Unidad_medida, Codigo_barras FROM Producto ORDER BY Nombre")
+        return cur.fetchall()
     finally:
-        cursor.close()
-        conexion.close()
+        cur.close(); cx.close()
 
 def registrar_compra_completa(id_tienda, id_usuario, id_proveedor, carrito, total_compra):
-    conexion = obtener_conexion()
-    if not conexion:
-        return False, "No hay conexión con la base de datos."
-    cursor = None
+    cx = obtener_conexion()
+    if not cx: return False, "No hay conexión con la base de datos."
+    cur = None
     try:
-        cursor = conexion.cursor(dictionary=True)
-        
-        sql_compra = """
-            INSERT INTO Compra (id_tienda, id_proveedor, id_usuario, Total, Estado)
-            VALUES (%s, %s, %s, %s, 'Recibida')
-        """
-        cursor.execute(sql_compra, (id_tienda, id_proveedor, id_usuario, total_compra))
-        id_compra_gen = cursor.lastrowid
+        cur = cx.cursor(dictionary=True)
+        cur.execute("INSERT INTO Compra (id_tienda, id_proveedor, id_usuario, Total, Estado) VALUES (%s, %s, %s, %s, 'Recibida')", (id_tienda, id_proveedor, id_usuario, total_compra))
+        id_compra_gen = cur.lastrowid
         
         for item in carrito:
-            sql_det = """
-                INSERT INTO Detalle_compra (id_compra, Cantidad, Precio_compra, Precio_venta_sugerido, Fecha_vencimiento)
-                VALUES (%s, %s, %s, %s, %s)
-            """
-            cursor.execute(sql_det, (
-                id_compra_gen,
-                item["cantidad"],
-                item["precio_compra"],
-                item["precio_venta"],
-                item["fecha_venc"]
-            ))
-            id_det_compra_gen = cursor.lastrowid
+            cur.execute("INSERT INTO Detalle_compra (id_compra, Cantidad, Precio_compra, Precio_venta_sugerido, Fecha_vencimiento) VALUES (%s, %s, %s, %s, %s)", (id_compra_gen, item["cantidad"], item["precio_compra"], item["precio_venta"], item["fecha_venc"]))
+            id_det_gen = cur.lastrowid
             
-            sql_pxp = """
+            cur.execute("""
                 INSERT INTO ProductoxProveedor (id_producto, id_proveedor, Ultimo_precio, Fecha_ultima_compra)
                 VALUES (%s, %s, %s, CURDATE())
-                ON DUPLICATE KEY UPDATE 
-                    Ultimo_precio = VALUES(Ultimo_precio),
-                    Fecha_ultima_compra = CURDATE()
-            """
-            cursor.execute(sql_pxp, (item["id_producto"], id_proveedor, item["precio_compra"]))
+                ON DUPLICATE KEY UPDATE Ultimo_precio = VALUES(Ultimo_precio), Fecha_ultima_compra = CURDATE()
+            """, (item["id_producto"], id_proveedor, item["precio_compra"]))
             
-            cursor.execute(
-                "SELECT id_inventario FROM Inventario WHERE id_tienda = %s AND id_producto = %s LIMIT 1",
-                (id_tienda, item["id_producto"])
-            )
-            inv_existente = cursor.fetchone()
+            cur.execute("SELECT id_inventario FROM Inventario WHERE id_tienda = %s AND id_producto = %s LIMIT 1", (id_tienda, item["id_producto"]))
+            inv = cur.fetchone()
             
-            if inv_existente:
-                sql_upd_inv = """
-                    UPDATE Inventario
-                    SET Existencia = Existencia + %s,
-                        Precio_venta = %s,
-                        id_detalle_compra = %s
-                    WHERE id_inventario = %s
-                """
-                cursor.execute(sql_upd_inv, (
-                    item["cantidad"],
-                    item["precio_venta"],
-                    id_det_compra_gen,
-                    inv_existente["id_inventario"]
-                ))
+            if inv:
+                cur.execute("UPDATE Inventario SET Existencia = Existencia + %s, Precio_venta = %s, id_detalle_compra = %s WHERE id_inventario = %s", (item["cantidad"], item["precio_venta"], id_det_gen, inv["id_inventario"]))
             else:
-                sql_ins_inv = """
-                    INSERT INTO Inventario (id_tienda, id_producto, id_detalle_compra, Existencia, Stock_minimo, Precio_venta)
-                    VALUES (%s, %s, %s, %s, 5, %s)
-                """
-                cursor.execute(sql_ins_inv, (
-                    id_tienda,
-                    item["id_producto"],
-                    id_det_compra_gen,
-                    item["cantidad"],
-                    item["precio_venta"]
-                ))
+                cur.execute("INSERT INTO Inventario (id_tienda, id_producto, id_detalle_compra, Existencia, Stock_minimo, Precio_venta) VALUES (%s, %s, %s, %s, 5, %s)", (id_tienda, item["id_producto"], id_det_gen, item["cantidad"], item["precio_venta"]))
                 
-        conexion.commit()
+        cx.commit()
         return True, f"✅ Compra #{id_compra_gen} registrada e inventario actualizado (${total_compra:.2f})."
     except Exception as e:
-        conexion.rollback()
+        cx.rollback()
         return False, f"❌ Error al registrar la compra: {e}"
     finally:
-        if cursor: cursor.close()
-        if conexion: conexion.close()
+        if cur: cur.close()
+        if cx: cx.close()
 
 def mostrar_compras():
     st.header("📥 Registrar Compra de Mercadería")
-    
     id_tienda = st.session_state.get("id_tienda")
     id_usuario = st.session_state.get("id_usuario")
     
-    # Inicializar contadores para reiniciar selectores a vacío
-    if "reset_prov_comp" not in st.session_state:
-        st.session_state["reset_prov_comp"] = 0
-    if "reset_prod_comp" not in st.session_state:
-        st.session_state["reset_prod_comp"] = 0
+    if "reset_prov_comp" not in st.session_state: st.session_state["reset_prov_comp"] = 0
+    if "reset_prod_comp" not in st.session_state: st.session_state["reset_prod_comp"] = 0
 
-    # Limpiar solo el producto tras agregar al carrito
     if st.session_state.get("limpiar_item_compra", False):
         st.session_state["reset_prod_comp"] += 1
-        st.session_state["comp_cant"] = 1
-        st.session_state["comp_costo"] = 1.00
+        st.session_state["comp_cant"] = 0
+        st.session_state["comp_costo"] = 0.00
         st.session_state["comp_venc_chk"] = False
         st.session_state["limpiar_item_compra"] = False
 
-    # Limpiar TODO (incluyendo proveedor) tras confirmar o vaciar toda la orden
     if st.session_state.get("limpiar_todo_compra", False):
         st.session_state["reset_prov_comp"] += 1
         st.session_state["reset_prod_comp"] += 1
-        st.session_state["comp_cant"] = 1
-        st.session_state["comp_costo"] = 1.00
+        st.session_state["comp_cant"] = 0
+        st.session_state["comp_costo"] = 0.00
         st.session_state["comp_venc_chk"] = False
         st.session_state["limpiar_todo_compra"] = False
 
-    if "carrito_compras" not in st.session_state:
-        st.session_state["carrito_compras"] = []
-    if "comp_cant" not in st.session_state:
-        st.session_state["comp_cant"] = 1
-    if "comp_costo" not in st.session_state:
-        st.session_state["comp_costo"] = 1.00
-    if "comp_venc_chk" not in st.session_state:
-        st.session_state["comp_venc_chk"] = False
+    if "carrito_compras" not in st.session_state: st.session_state["carrito_compras"] = []
+    if "comp_cant" not in st.session_state: st.session_state["comp_cant"] = 0
+    if "comp_costo" not in st.session_state: st.session_state["comp_costo"] = 0.00
+    if "comp_venc_chk" not in st.session_state: st.session_state["comp_venc_chk"] = False
         
     if st.session_state.get("msg_exito_compra"):
         st.success(st.session_state.pop("msg_exito_compra"))
@@ -165,17 +99,15 @@ def mostrar_compras():
     productos = obtener_productos_catalogo()
     
     if not proveedores:
-        st.warning("⚠️ No hay proveedores disponibles para esta sucursal en el catálogo.")
+        st.warning("⚠️ No hay proveedores disponibles para esta sucursal.")
         return
     if not productos:
         st.warning("⚠️ Primero debes registrar productos en el catálogo.")
         return
 
-    # 1. Selector de Proveedor (Inicia vacío y se bloquea si ya agregaste productos al carrito)
-    opciones_prov = [None] + proveedores
     prov_sel = st.selectbox(
         "Proveedor",
-        opciones_prov,
+        [None] + proveedores,
         index=0,
         format_func=lambda x: "-- Selecciona un proveedor --" if x is None else f"{x['Nombre']} ({x['Tipo']})",
         key=f"sel_prov_comp_{st.session_state['reset_prov_comp']}",
@@ -185,37 +117,31 @@ def mostrar_compras():
     st.divider()
     st.subheader("Detalle de Productos Recibidos")
     
-    # 2. Selector de Producto (Inicia vacío)
-    opciones_prod = [None] + productos
     c1, c2 = st.columns(2)
     with c1:
         prod_sel = st.selectbox(
             "Producto del Catálogo",
-            opciones_prod,
+            [None] + productos,
             index=0,
             format_func=lambda x: "-- Selecciona un producto --" if x is None else f"{x['Nombre']} ({x['Unidad_medida']}) - {x['Codigo_barras']}",
             key=f"sel_prod_comp_{st.session_state['reset_prod_comp']}"
         )
-        cantidad = st.number_input("Cantidad recibida", min_value=1, step=1, key="comp_cant")
+        cantidad = st.number_input("Cantidad recibida", min_value=0, step=1, key="comp_cant")
     with c2:
-        precio_compra = st.number_input("Precio de Compra Unitario ($)", min_value=0.01, step=0.05, format="%.2f", key="comp_costo")
-        # Cálculo automático del 20% de ganancia y bloqueado para edición
+        precio_compra = st.number_input("Precio de Compra Unitario ($)", min_value=0.00, step=0.05, format="%.2f", key="comp_costo")
         precio_sugerido = round(precio_compra * 1.20, 2)
-        st.number_input(
-            "Precio de Venta Sugerido (+20%)",
-            value=precio_sugerido,
-            format="%.2f",
-            disabled=True
-        )
+        st.number_input("Precio de Venta Sugerido (+20%)", value=precio_sugerido, format="%.2f", disabled=True)
 
     tiene_vencimiento = st.checkbox("📅 Este lote tiene fecha de vencimiento", key="comp_venc_chk")
-    fecha_venc = None
-    if tiene_vencimiento:
-        fecha_venc = st.date_input("Fecha de Vencimiento", min_value=date.today())
+    fecha_venc = st.date_input("Fecha de Vencimiento", min_value=date.today()) if tiene_vencimiento else None
 
     if st.button("➕ Agregar Producto a la Compra"):
         if prod_sel is None:
-            st.warning("⚠️ Por favor, selecciona un producto del catálogo antes de agregar.")
+            st.warning("⚠️ Por favor, selecciona un producto del catálogo.")
+        elif cantidad <= 0:
+            st.warning("⚠️ La cantidad recibida debe ser mayor a 0.")
+        elif precio_compra <= 0:
+            st.warning("⚠️ El precio de compra unitario debe ser mayor a $0.00.")
         else:
             st.session_state["carrito_compras"].append({
                 "id_producto": prod_sel["id_producto"],
@@ -230,7 +156,6 @@ def mostrar_compras():
             st.session_state["limpiar_item_compra"] = True
             st.rerun()
 
-    # 3. Resumen y Guardado
     if st.session_state["carrito_compras"]:
         st.divider()
         st.subheader("Resumen de la Orden de Compra")
@@ -260,13 +185,7 @@ def mostrar_compras():
                 if prov_sel is None:
                     st.error("❌ Debes seleccionar un proveedor para confirmar la compra.")
                 else:
-                    exito, msg = registrar_compra_completa(
-                        id_tienda,
-                        id_usuario,
-                        prov_sel["id_proveedor"],
-                        st.session_state["carrito_compras"],
-                        total_compra
-                    )
+                    exito, msg = registrar_compra_completa(id_tienda, id_usuario, prov_sel["id_proveedor"], st.session_state["carrito_compras"], total_compra)
                     if exito:
                         st.session_state["carrito_compras"] = []
                         st.session_state["msg_exito_compra"] = msg
