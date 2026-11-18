@@ -84,8 +84,11 @@ def mostrar_proveedores():
                         cur.close(); cx.close()
 
     with tab2:
+        if "reset_sel_ed" not in st.session_state:
+            st.session_state["reset_sel_ed"] = 0
+
         if st.session_state.get("limpiar_ed_prov", False):
-            st.session_state["sel_ed_p"] = None
+            st.session_state["reset_sel_ed"] += 1
             st.session_state["last_ed_id"] = None
             for k, v in [("ed_nom", ""), ("ed_tipo", "Persona Natural"), ("ed_rad", "Ninguno"), ("ed_dui", ""), ("ed_nit", ""), ("ed_tel", "")]:
                 st.session_state[k] = v
@@ -117,8 +120,9 @@ def mostrar_proveedores():
         sel = st.selectbox(
             "Selecciona el proveedor a modificar",
             opciones_ed,
+            index=0,
             format_func=lambda x: "-- Selecciona un proveedor --" if x is None else f"{x['id_proveedor']} - {x['Nombre']} ({x['Tipo']})",
-            key="sel_ed_p"
+            key=f"sel_ed_p_{st.session_state['reset_sel_ed']}"
         )
 
         if sel is None:
