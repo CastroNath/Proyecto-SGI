@@ -74,23 +74,23 @@ def mostrar_compras():
 
     if st.session_state.get("limpiar_item_compra", False):
         st.session_state["reset_prod_comp"] += 1
-        st.session_state["comp_cant"] = 0
-        st.session_state["comp_costo"] = 0.00
-        st.session_state["comp_venc_chk"] = False
+        st.session_state["comp_cant_0"] = 0
+        st.session_state["comp_costo_0"] = 0.00
+        st.session_state["comp_venc_chk_0"] = False
         st.session_state["limpiar_item_compra"] = False
 
     if st.session_state.get("limpiar_todo_compra", False):
         st.session_state["reset_prov_comp"] += 1
         st.session_state["reset_prod_comp"] += 1
-        st.session_state["comp_cant"] = 0
-        st.session_state["comp_costo"] = 0.00
-        st.session_state["comp_venc_chk"] = False
+        st.session_state["comp_cant_0"] = 0
+        st.session_state["comp_costo_0"] = 0.00
+        st.session_state["comp_venc_chk_0"] = False
         st.session_state["limpiar_todo_compra"] = False
 
     if "carrito_compras" not in st.session_state: st.session_state["carrito_compras"] = []
-    if "comp_cant" not in st.session_state: st.session_state["comp_cant"] = 0
-    if "comp_costo" not in st.session_state: st.session_state["comp_costo"] = 0.00
-    if "comp_venc_chk" not in st.session_state: st.session_state["comp_venc_chk"] = False
+    if "comp_cant_0" not in st.session_state: st.session_state["comp_cant_0"] = 0
+    if "comp_costo_0" not in st.session_state: st.session_state["comp_costo_0"] = 0.00
+    if "comp_venc_chk_0" not in st.session_state: st.session_state["comp_venc_chk_0"] = False
         
     if st.session_state.get("msg_exito_compra"):
         st.success(st.session_state.pop("msg_exito_compra"))
@@ -126,13 +126,13 @@ def mostrar_compras():
             format_func=lambda x: "-- Selecciona un producto --" if x is None else f"{x['Nombre']} ({x['Unidad_medida']}) - {x['Codigo_barras']}",
             key=f"sel_prod_comp_{st.session_state['reset_prod_comp']}"
         )
-        cantidad = st.number_input("Cantidad recibida", min_value=0, step=1, key="comp_cant")
+        cantidad = st.number_input("Cantidad recibida", min_value=0, step=1, key="comp_cant_0")
     with c2:
-        precio_compra = st.number_input("Precio de Compra Unitario ($)", min_value=0.00, step=0.05, format="%.2f", key="comp_costo")
+        precio_compra = st.number_input("Precio de Compra Unitario ($)", min_value=0.00, step=0.05, format="%.2f", key="comp_costo_0")
         precio_sugerido = round(precio_compra * 1.20, 2)
         st.number_input("Precio de Venta Sugerido (+20%)", value=precio_sugerido, format="%.2f", disabled=True)
 
-    tiene_vencimiento = st.checkbox("📅 Este lote tiene fecha de vencimiento", key="comp_venc_chk")
+    tiene_vencimiento = st.checkbox("📅 Este lote tiene fecha de vencimiento", key="comp_venc_chk_0")
     fecha_venc = st.date_input("Fecha de Vencimiento", min_value=date.today()) if tiene_vencimiento else None
 
     if st.button("➕ Agregar Producto a la Compra"):
