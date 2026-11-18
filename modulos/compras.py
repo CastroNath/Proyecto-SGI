@@ -126,12 +126,28 @@ def mostrar_compras():
     id_tienda = st.session_state.get("id_tienda")
     id_usuario = st.session_state.get("id_usuario")
     
-    if st.session_state.get("limpiar_campos_compra", False):
+    # Inicializar contadores para reiniciar selectores a vacío
+    if "reset_prov_comp" not in st.session_state:
+        st.session_state["reset_prov_comp"] = 0
+    if "reset_prod_comp" not in st.session_state:
+        st.session_state["reset_prod_comp"] = 0
+
+    # Limpiar solo el producto tras agregar al carrito
+    if st.session_state.get("limpiar_item_compra", False):
+        st.session_state["reset_prod_comp"] += 1
         st.session_state["comp_cant"] = 1
         st.session_state["comp_costo"] = 1.00
-        st.session_state["comp_venta"] = 1.25
         st.session_state["comp_venc_chk"] = False
-        st.session_state["limpiar_campos_compra"] = False
+        st.session_state["limpiar_item_compra"] = False
+
+    # Limpiar TODO (incluyendo proveedor) tras confirmar o vaciar toda la orden
+    if st.session_state.get("limpiar_todo_compra", False):
+        st.session_state["reset_prov_comp"] += 1
+        st.session_state["reset_prod_comp"] += 1
+        st.session_state["comp_cant"] = 1
+        st.session_state["comp_costo"] = 1.00
+        st.session_state["comp_venc_chk"] = False
+        st.session_state["limpiar_todo_compra"] = False
 
     if "carrito_compras" not in st.session_state:
         st.session_state["carrito_compras"] = []
@@ -139,14 +155,11 @@ def mostrar_compras():
         st.session_state["comp_cant"] = 1
     if "comp_costo" not in st.session_state:
         st.session_state["comp_costo"] = 1.00
-    if "comp_venta" not in st.session_state:
-        st.session_state["comp_venta"] = 1.25
     if "comp_venc_chk" not in st.session_state:
         st.session_state["comp_venc_chk"] = False
         
     if st.session_state.get("msg_exito_compra"):
-        st.success(st.session_state["msg_exito_compra"])
-        st.session_state["msg_exito_compra"] = ""
+        st.success(st.session_state.pop("msg_exito_compra"))
 
     proveedores = obtener_proveedores(id_tienda)
     productos = obtener_productos_catalogo()
@@ -158,26 +171,42 @@ def mostrar_compras():
         st.warning("⚠️ Primero debes registrar productos en el catálogo.")
         return
 
+    # 1. Selector de Proveedor (Inicia vacío y se bloquea si ya agregaste productos al carrito)
+    opciones_prov = [None] + proveedores
     prov_sel = st.selectbox(
         "Proveedor",
-        proveedores,
-        format_func=lambda x: f"{x['Nombre']} ({x['Tipo']})"
+        opciones_prov,
+        index=0,
+        format_func=lambda x: "-- Selecciona un proveedor --" if x is None else f"{x['Nombre']} ({x['Tipo']})",
+        key=f"sel_prov_comp_{st.session_state['reset_prov_comp']}",
+        disabled=(len(st.session_state["carrito_compras"]) > 0)
     )
 
     st.divider()
     st.subheader("Detalle de Productos Recibidos")
     
+    # 2. Selector de Producto (Inicia vacío)
+    opciones_prod = [None] + productos
     c1, c2 = st.columns(2)
     with c1:
         prod_sel = st.selectbox(
             "Producto del Catálogo",
-            productos,
-            format_func=lambda x: f"{x['Nombre']} ({x['Unidad_medida']}) - {x['Codigo_barras']}"
+            opciones_prod,
+            index=0,
+            format_func=lambda x: "-- Selecciona un producto --" if x is None else f"{x['Nombre']} ({x['Unidad_medida']}) - {x['Codigo_barras']}",
+            key=f"sel_prod_comp_{st.session_state['reset_prod_comp']}"
         )
         cantidad = st.number_input("Cantidad recibida", min_value=1, step=1, key="comp_cant")
     with c2:
         precio_compra = st.number_input("Precio de Compra Unitario ($)", min_value=0.01, step=0.05, format="%.2f", key="comp_costo")
-        precio_venta = st.number_input("Precio de Venta Definido ($)", min_value=0.01, step=0.05, format="%.2f", key="comp_venta")
+        # Cálculo automático del 20% de ganancia y bloqueado para edición
+        precio_sugerido = round(precio_compra * 1.20, 2)
+        st.number_input(
+            "Precio de Venta Sugerido (+20%)",
+            value=precio_sugerido,
+            format="%.2f",
+            disabled=True
+        )
 
     tiene_vencimiento = st.checkbox("📅 Este lote tiene fecha de vencimiento", key="comp_venc_chk")
     fecha_venc = None
@@ -185,19 +214,23 @@ def mostrar_compras():
         fecha_venc = st.date_input("Fecha de Vencimiento", min_value=date.today())
 
     if st.button("➕ Agregar Producto a la Compra"):
-        st.session_state["carrito_compras"].append({
-            "id_producto": prod_sel["id_producto"],
-            "nombre": prod_sel["Nombre"],
-            "unidad": prod_sel["Unidad_medida"],
-            "cantidad": cantidad,
-            "precio_compra": precio_compra,
-            "precio_venta": precio_venta,
-            "fecha_venc": fecha_venc,
-            "subtotal": cantidad * precio_compra
-        })
-        st.session_state["limpiar_campos_compra"] = True
-        st.rerun()
+        if prod_sel is None:
+            st.warning("⚠️ Por favor, selecciona un producto del catálogo antes de agregar.")
+        else:
+            st.session_state["carrito_compras"].append({
+                "id_producto": prod_sel["id_producto"],
+                "nombre": prod_sel["Nombre"],
+                "unidad": prod_sel["Unidad_medida"],
+                "cantidad": cantidad,
+                "precio_compra": precio_compra,
+                "precio_venta": precio_sugerido,
+                "fecha_venc": fecha_venc,
+                "subtotal": cantidad * precio_compra
+            })
+            st.session_state["limpiar_item_compra"] = True
+            st.rerun()
 
+    # 3. Resumen y Guardado
     if st.session_state["carrito_compras"]:
         st.divider()
         st.subheader("Resumen de la Orden de Compra")
@@ -208,7 +241,7 @@ def mostrar_compras():
             col1.write(f"**{item['nombre']}** ({item['unidad']})")
             col2.write(f"Cant: {item['cantidad']}")
             col3.write(f"Costo: ${item['precio_compra']:.2f}")
-            col4.write(f"Venta: ${item['precio_venta']:.2f}")
+            col4.write(f"Sugerido: ${item['precio_venta']:.2f}")
             if col5.button("🗑️", key=f"del_comp_{idx}"):
                 st.session_state["carrito_compras"].pop(idx)
                 st.rerun()
@@ -220,21 +253,24 @@ def mostrar_compras():
         with b1:
             if st.button("🧹 Limpiar Orden"):
                 st.session_state["carrito_compras"] = []
-                st.session_state["limpiar_campos_compra"] = True
+                st.session_state["limpiar_todo_compra"] = True
                 st.rerun()
         with b2:
             if st.button("💾 Confirmar Compra e Ingresar al Inventario"):
-                exito, msg = registrar_compra_completa(
-                    id_tienda,
-                    id_usuario,
-                    prov_sel["id_proveedor"],
-                    st.session_state["carrito_compras"],
-                    total_compra
-                )
-                if exito:
-                    st.session_state["carrito_compras"] = []
-                    st.session_state["msg_exito_compra"] = msg
-                    st.session_state["limpiar_campos_compra"] = True
-                    st.rerun()
+                if prov_sel is None:
+                    st.error("❌ Debes seleccionar un proveedor para confirmar la compra.")
                 else:
-                    st.error(msg)
+                    exito, msg = registrar_compra_completa(
+                        id_tienda,
+                        id_usuario,
+                        prov_sel["id_proveedor"],
+                        st.session_state["carrito_compras"],
+                        total_compra
+                    )
+                    if exito:
+                        st.session_state["carrito_compras"] = []
+                        st.session_state["msg_exito_compra"] = msg
+                        st.session_state["limpiar_todo_compra"] = True
+                        st.rerun()
+                    else:
+                        st.error(msg)
