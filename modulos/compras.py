@@ -136,7 +136,9 @@ def mostrar_compras():
     fecha_venc = st.date_input("Fecha de Vencimiento", min_value=date.today()) if tiene_vencimiento else None
 
     if st.button("➕ Agregar Producto a la Compra"):
-        if prod_sel is None:
+        if prov_sel is None:
+            st.warning("⚠️ Primero debes seleccionar un proveedor.")
+        elif prod_sel is None:
             st.warning("⚠️ Por favor, selecciona un producto del catálogo.")
         elif cantidad <= 0:
             st.warning("⚠️ La cantidad recibida debe ser mayor a 0.")
