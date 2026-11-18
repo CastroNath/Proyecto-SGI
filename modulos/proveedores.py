@@ -23,12 +23,12 @@ def limpiar_y_formatear_nit():
         st.session_state["input_nit"] = solo_num
 
 def limpiar_y_formatear_tel():
-    texto = st.session_state.get("input_tel", "")
+    texto = st.session_state.get("input_tel_sv", "")
     solo_num = "".join(filter(str.isdigit, texto))[:8]
     if len(solo_num) > 4:
-        st.session_state["input_tel"] = f"{solo_num[:4]}-{solo_num[4:]}"
+        st.session_state["input_tel_sv"] = f"{solo_num[:4]}-{solo_num[4:]}"
     else:
-        st.session_state["input_tel"] = solo_num
+        st.session_state["input_tel_sv"] = solo_num
 
 def mostrar_proveedores():
     st.header("🚚 Gestión de Proveedores")
@@ -40,7 +40,7 @@ def mostrar_proveedores():
         st.session_state["input_doc_radio"] = "Ninguno"
         st.session_state["input_dui"] = ""
         st.session_state["input_nit"] = ""
-        st.session_state["input_tel"] = ""
+        st.session_state["input_tel_sv"] = ""
         st.session_state["limpiar_campos_prov"] = False
 
     # 2. Mostrar mensaje de éxito si se acaba de guardar un proveedor
@@ -59,8 +59,8 @@ def mostrar_proveedores():
         st.session_state["input_dui"] = ""
     if "input_nit" not in st.session_state:
         st.session_state["input_nit"] = ""
-    if "input_tel" not in st.session_state:
-        st.session_state["input_tel"] = ""
+    if "input_tel_sv" not in st.session_state:
+        st.session_state["input_tel_sv"] = ""
 
     # 4. Dibujar los campos del formulario
     nombre = st.text_input("Nombre Completo", key="input_nombre_prov")
@@ -70,7 +70,6 @@ def mostrar_proveedores():
         key="input_tipo_prov"
     )
     
-    # Regla de negocio: Persona Natural solo lleva DUI (opcional); Empresa o Cooperativa llevan NIT (opcional)
     opciones_doc = ["Ninguno", "DUI"] if tipo == "Persona Natural" else ["Ninguno", "NIT"]
     if st.session_state["input_doc_radio"] not in opciones_doc:
         st.session_state["input_doc_radio"] = "Ninguno"
@@ -105,13 +104,14 @@ def mostrar_proveedores():
             on_change=limpiar_y_formatear_nit
         )
         
-    valor_tel = st.session_state.get("input_tel", "")
+    # Tope estricto en 8 caracteres mientras el usuario escribe sin guion
+    valor_tel = st.session_state.get("input_tel_sv", "")
     tope_tel = 9 if "-" in valor_tel else 8
     telefono_raw = st.text_input(
         "Teléfono",
         max_chars=tope_tel,
         placeholder="0000-0000",
-        key="input_tel",
+        key="input_tel_sv",
         on_change=limpiar_y_formatear_tel
     )
 
