@@ -1,8 +1,6 @@
 import mysql.connector
 import streamlit as st
-
 from config.conexion import consultar, obtener_conexion
-
 
 def mostrar_categorias():
     st.header("📁 Gestión de Categorías")
