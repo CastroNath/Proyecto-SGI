@@ -135,8 +135,13 @@ def mostrar_compras():
             c1, c2 = st.columns(2)
             with c1:
                 cantidad = st.number_input("Cantidad solicitada", min_value=0, step=1)
-                lead_time = st.number_input("Lead time (días de entrega)", min_value=1, max_value=90, step=1, value=1,
-                                            disabled=al_cd)
+                if al_cd:
+                    lead_time = 1  # el despacho del CD se recibe al confirmar; no hay plazo que capturar
+                else:
+                    lead_time = st.number_input("Días que tarda el proveedor en entregar (lead time)", min_value=1,
+                                                max_value=90, step=1, value=1,
+                                                help="Días desde que haces el pedido hasta que llega a tu tienda. "
+                                                     "Sirve para calcular cuándo volver a pedir.")
                 demanda_mensual = st.number_input("Demanda estimada mensual (unidades/mes)", min_value=1, step=1,
                                                   value=30)
             with c2:
@@ -154,9 +159,13 @@ def mostrar_compras():
             agregar = st.form_submit_button("➕ Agregar producto a la orden")
 
         demanda_diaria = demanda_mensual / 30.0
-        rop = max(1, math.ceil(demanda_diaria * (1 if al_cd else lead_time)))
-        st.caption(f"📐 Punto de reorden (stock mínimo) = demanda diaria {demanda_diaria:.2f} × lead time "
-                   f"{1 if al_cd else lead_time} días → **{rop}** unidades. Se guardará en el inventario de la tienda.")
+        rop = max(1, math.ceil(demanda_diaria * lead_time))
+        if al_cd:
+            st.caption(f"📐 Punto de reorden (stock mínimo) = demanda diaria {demanda_diaria:.2f} → **{rop}** "
+                       "unidades. Se guardará en el inventario de la tienda.")
+        else:
+            st.caption(f"📐 Punto de reorden (stock mínimo) = demanda diaria {demanda_diaria:.2f} × {lead_time} "
+                       f"días de entrega → **{rop}** unidades. Se guardará en el inventario de la tienda.")
 
         if agregar:
             if prov_sel is None:
