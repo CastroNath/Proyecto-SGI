@@ -81,15 +81,17 @@ def mostrar_compras():
                     st.dataframe(comp, width="stretch", hide_index=True,
                                  column_config={"Precio": st.column_config.NumberColumn(format="$%.2f")})
             if not es_cd and info_cd:
-                if info_cd["CD_autorizado"]:
-                    st.success(f"✅ El CD está **autorizado** para este producto: su costo (${info_cd['Costo_CD']}) es "
-                               f"menor que el de proveedores externos (${info_cd['Costo_externo'] or '—'}). "
-                               f"Existencia en CD: **{info_cd['Existencia'] or 0}**.")
+                # La tienda solo ve el precio al que le vende el CD, nunca su costo
+                precio_cd = float(info_cd["Precio_venta"] or 0)
+                if info_cd["CD_autorizado"] and (info_cd["Existencia"] or 0) > 0:
+                    st.success(f"🏢 Disponible en el Centro de Distribución a **\\${precio_cd:.2f}** por unidad. "
+                               f"Existencia en el CD: **{info_cd['Existencia']}**.")
+                elif info_cd["CD_autorizado"]:
+                    st.warning("🏢 El Centro de Distribución ofrece este producto, pero ahora no tiene existencias. "
+                               "Puedes comprarlo a un proveedor externo.")
                 else:
-                    st.info(f"💡 El CD **no** está autorizado para este producto (costo CD: "
-                            f"{'$' + str(info_cd['Costo_CD']) if info_cd['Costo_CD'] else 'sin compras'}, "
-                            f"externo: {'$' + str(info_cd['Costo_externo']) if info_cd['Costo_externo'] else '—'}). "
-                            "Compra a un proveedor externo.")
+                    st.info("💡 El Centro de Distribución no ofrece este producto en este momento. "
+                            "Cómpralo a un proveedor externo.")
 
         st.divider()
         with st.form(f"item_compra_{r}_{len(carrito)}"):
@@ -130,7 +132,7 @@ def mostrar_compras():
             elif any(i["id_producto"] == prod_sel["id_producto"] for i in carrito):
                 st.warning("⚠️ Ese producto ya está en la orden; elimínalo para cambiar la cantidad.")
             elif al_cd and not (info_cd and info_cd["CD_autorizado"]):
-                st.error("❌ No se puede pedir este producto al CD: su costo global no es menor que el externo.")
+                st.error("❌ El Centro de Distribución no ofrece este producto en este momento.")
             elif al_cd and (info_cd["Existencia"] or 0) < cantidad:
                 st.error(f"❌ El CD solo tiene {info_cd['Existencia'] or 0} unidades de este producto.")
             elif precio_compra <= 0:
@@ -155,8 +157,8 @@ def mostrar_compras():
                 c1.write(f"**{it['nombre']}** ({it['unidad']}) · *ROP: {it['stock_minimo']}*"
                          + (f" · vence {it['fecha_venc']:%d/%m/%Y}" if it["fecha_venc"] else ""))
                 c2.write(f"Cant: {it['cantidad']}")
-                c3.write(f"Costo: ${it['precio_compra']:.2f}")
-                c4.write(f"Venta: ${it['precio_venta']:.2f}")
+                c3.write(f"Costo: \\${it['precio_compra']:.2f}")
+                c4.write(f"Venta: \\${it['precio_venta']:.2f}")
                 if c5.button("🗑️", key=f"del_comp_{idx}"):
                     carrito.pop(idx)
                     st.rerun()
@@ -174,12 +176,12 @@ def mostrar_compras():
                             idv = solicitar_al_cd(id_tienda, id_usuario,
                                                   [{"id_producto": i["id_producto"], "cantidad": i["cantidad"],
                                                     "precio": i["precio_compra"]} for i in carrito])
-                            msg = (f"🚚 Pedido al CD registrado como despacho #{idv} por ${total:.2f}. "
+                            msg = (f"🚚 Pedido al CD registrado como despacho #{idv} por \\${total:.2f}. "
                                    "Tu compra quedará registrada cuando confirmes la recepción física.")
                         else:
                             idc = registrar_compra(id_tienda, prov_sel["id_proveedor"], id_usuario, carrito,
                                                    dias_entrega=max(i["lead_time"] for i in carrito))
-                            msg = (f"🚚 Orden #{idc} registrada **En tránsito** por ${total:.2f}. "
+                            msg = (f"🚚 Orden #{idc} registrada **En tránsito** por \\${total:.2f}. "
                                    "Confirma la recepción cuando llegue la mercadería.")
                         _limpiar_carrito()
                         st.session_state["msg_exito_compra"] = msg
