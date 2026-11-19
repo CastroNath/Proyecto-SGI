@@ -118,13 +118,15 @@ def evaluacion_cd(cur, id_producto):
 
 
 def _validar_cd_autorizado(cur, id_producto, nombre):
-    """Regla: el CD solo abastece si su costo global es menor que el externo.
-    El mensaje no revela costos: las tiendas no deben conocer el costo del CD."""
+    """Regla: la tienda compra al CD solo si el CD le vende más barato que el proveedor externo
+    más barato (v_evaluacion_cd). El mensaje no revela el costo del CD."""
     ev = evaluacion_cd(cur, id_producto)
     if not ev or not ev["CD_autorizado"]:
+        externo = f" (el proveedor externo más barato lo vende a ${ev['Mejor_precio_externo']})" \
+            if ev and ev["Mejor_precio_externo"] is not None else ""
         raise ReglaNegocioError(
-            f"El Centro de Distribución no puede abastecer «{nombre}» en este momento: su costo de compra "
-            "no es menor que el de los proveedores externos. Cómpralo a un proveedor externo.")
+            f"El Centro de Distribución no puede abastecer «{nombre}»: no es la opción más barata{externo}. "
+            "Cómpralo al proveedor externo.")
 
 
 def _validar_items(items):
@@ -231,6 +233,8 @@ def _aplicar_recepcion(cur, id_compra, fecha):
     """Entrada a inventario + creación de lotes + actualización de ProductoxProveedor."""
     cur.execute("SELECT * FROM Compra WHERE id_compra=%s", (id_compra,))
     compra = cur.fetchone()
+    cur.execute("SELECT Tipo FROM Tienda WHERE id_tienda=%s", (compra["id_tienda"],))
+    comprador_es_cd = es_cd(cur.fetchone())
     cur.execute("SELECT * FROM Detalle_compra WHERE id_compra=%s", (id_compra,))
     for dc in cur.fetchall():
         if dc["id_producto"] is None:
@@ -243,11 +247,21 @@ def _aplicar_recepcion(cur, id_compra, fecha):
                     (compra["id_tienda"], dc["id_producto"], int(dc["Cantidad"]), sugerido or 0, sugerido, sugerido))
         cur.execute("INSERT INTO Lote (id_detalle_compra, Fecha_vencimiento, Cantidad_disponible) VALUES (%s,%s,%s)",
                     (dc["id_detalle_compra"], dc["Fecha_vencimiento"], dc["Cantidad"]))
-        cur.execute("""INSERT INTO ProductoxProveedor (id_producto, id_proveedor, Ultimo_precio, Fecha_ultima_compra)
-                       VALUES (%s,%s,%s,%s)
-                       ON DUPLICATE KEY UPDATE Ultimo_precio = VALUES(Ultimo_precio),
-                                               Fecha_ultima_compra = VALUES(Fecha_ultima_compra)""",
-                    (dc["id_producto"], compra["id_proveedor"], dc["Precio_compra"], fecha.date()))
+        if comprador_es_cd:
+            # El CD compra con descuento por volumen: se registra que el proveedor le suministra el
+            # producto, pero NO se cambia el precio de lista que ven las tiendas (y su costo queda privado)
+            cur.execute("""INSERT INTO ProductoxProveedor (id_producto, id_proveedor, Ultimo_precio, Fecha_ultima_compra)
+                           VALUES (%s,%s,NULL,%s)
+                           ON DUPLICATE KEY UPDATE Fecha_ultima_compra = GREATEST(COALESCE(Fecha_ultima_compra,
+                                                                         VALUES(Fecha_ultima_compra)), VALUES(Fecha_ultima_compra))""",
+                        (dc["id_producto"], compra["id_proveedor"], fecha.date()))
+        else:
+            # Compra de una tienda: actualiza el precio de lista del proveedor
+            cur.execute("""INSERT INTO ProductoxProveedor (id_producto, id_proveedor, Ultimo_precio, Fecha_ultima_compra)
+                           VALUES (%s,%s,%s,%s)
+                           ON DUPLICATE KEY UPDATE Ultimo_precio = VALUES(Ultimo_precio),
+                                                   Fecha_ultima_compra = VALUES(Fecha_ultima_compra)""",
+                        (dc["id_producto"], compra["id_proveedor"], dc["Precio_compra"], fecha.date()))
     cur.execute("UPDATE Compra SET Estado='Recibida', Fecha_recepcion=%s WHERE id_compra=%s", (fecha, id_compra))
 
 
