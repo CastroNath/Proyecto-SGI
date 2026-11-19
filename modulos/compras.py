@@ -4,6 +4,7 @@ from datetime import date, timedelta
 import streamlit as st
 
 from config.conexion import consultar, consultar_uno
+from modulos.inventario import DIAS_DEMANDA
 from modulos.negocio import (MARGEN_VENTA, ReglaNegocioError, ahora_sv, anular_compra, confirmar_despacho_cd,
                              recibir_compra, registrar_compra, solicitar_al_cd)
 
@@ -49,6 +50,15 @@ def obtener_comparativa_producto(id_producto, es_cd):
                       "Fecha_ultima_compra": None})
         filas.sort(key=lambda f: float(f["Precio"]))
     return filas
+
+
+def demanda_real(id_tienda, id_producto):
+    """Unidades diarias vendidas por la tienda en los últimos DIAS_DEMANDA días."""
+    r = consultar_uno(f"""SELECT COALESCE(SUM(dv.Cantidad), 0) AS q FROM Venta v
+                          JOIN Detalle_venta dv ON dv.id_venta = v.id_venta
+                          WHERE v.id_tienda = %s AND dv.id_producto = %s
+                            AND v.Fecha >= NOW() - INTERVAL {DIAS_DEMANDA} DAY""", (id_tienda, id_producto))
+    return float(r["q"]) / DIAS_DEMANDA if r else 0.0
 
 
 def datos_cd_producto(id_producto):
@@ -142,8 +152,6 @@ def mostrar_compras():
                                                 max_value=90, step=1, value=1,
                                                 help="Días desde que haces el pedido hasta que llega a tu tienda. "
                                                      "Sirve para calcular cuándo volver a pedir.")
-                demanda_mensual = st.number_input("Demanda estimada mensual (unidades/mes)", min_value=1, step=1,
-                                                  value=30)
             with c2:
                 if al_cd:
                     precio_cd = float(info_cd["Precio_venta"]) if info_cd and info_cd["Precio_venta"] else 0.0
@@ -158,14 +166,17 @@ def mostrar_compras():
                               if tiene_venc else None)
             agregar = st.form_submit_button("➕ Agregar producto a la orden")
 
-        demanda_diaria = demanda_mensual / 30.0
-        rop = max(1, math.ceil(demanda_diaria * lead_time))
-        if al_cd:
-            st.caption(f"📐 Punto de reorden (stock mínimo) = demanda diaria {demanda_diaria:.2f} → **{rop}** "
-                       "unidades. Se guardará en el inventario de la tienda.")
-        else:
-            st.caption(f"📐 Punto de reorden (stock mínimo) = demanda diaria {demanda_diaria:.2f} × {lead_time} "
-                       f"días de entrega → **{rop}** unidades. Se guardará en el inventario de la tienda.")
+        # Stock mínimo automático: misma fórmula que Inventario → Ajustes, con las ventas reales de la tienda
+        demanda_diaria = demanda_real(id_tienda, prod_sel["id_producto"]) if prod_sel else 0.0
+        rop = max(1, math.ceil(demanda_diaria * lead_time)) if demanda_diaria > 0 else None
+        if prod_sel:
+            if rop is None:
+                st.caption(f"📐 Sin ventas de este producto en los últimos {DIAS_DEMANDA} días: "
+                           "el stock mínimo actual no se modifica.")
+            else:
+                st.caption(f"📐 Stock mínimo automático = demanda diaria real **{demanda_diaria:.2f}** "
+                           f"(ventas de los últimos {DIAS_DEMANDA} días)"
+                           + ("." if al_cd else " × los días de entrega que indiques. Lo verás en la orden."))
 
         if agregar:
             if prov_sel is None:
@@ -199,7 +210,8 @@ def mostrar_compras():
             total = 0.0
             for idx, it in enumerate(carrito):
                 c1, c2, c3, c4, c5 = st.columns([3, 1.2, 1.5, 1.5, 0.8])
-                c1.write(f"**{it['nombre']}** ({it['unidad']}) · *ROP: {it['stock_minimo']}*"
+                c1.write(f"**{it['nombre']}** ({it['unidad']})"
+                         + (f" · *stock mínimo: {it['stock_minimo']}*" if it["stock_minimo"] else "")
                          + (f" · vence {it['fecha_venc']:%d/%m/%Y}" if it["fecha_venc"] else ""))
                 c2.write(f"Cant: {it['cantidad']}")
                 c3.write(f"Costo: \\${it['precio_compra']:.2f}")
