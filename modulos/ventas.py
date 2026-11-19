@@ -99,8 +99,8 @@ def mostrar_ventas():
                 c1, c2, c3, c4, c5 = st.columns([3, 1, 1.5, 1.5, 0.8])
                 c1.write(f"**{it['nombre']}** ({it['unidad']})")
                 c2.write(f"Cant: {it['cantidad']}")
-                c3.write(f"${it['precio']:.2f} c/u")
-                c4.write(f"**${it['cantidad'] * it['precio']:.2f}**")
+                c3.write(f"\\${it['precio']:.2f} c/u")
+                c4.write(f"**\\${it['cantidad'] * it['precio']:.2f}**")
                 if c5.button("🗑️", key=f"del_{clave}_{idx}"):
                     carrito.pop(idx)
                     st.rerun()
@@ -123,8 +123,8 @@ def mostrar_ventas():
                         st.session_state[clave] = []
                         st.session_state[f"reset_{clave}"] += 1
                         st.session_state[f"ok_{clave}"] = (
-                            f"🚚 Despacho #{idv} enviado por ${total:.2f}. La tienda destino debe confirmar la recepción."
-                            if a_tienda else f"✅ Venta #{idv} registrada por ${total:.2f}.")
+                            f"🚚 Despacho #{idv} enviado por \\${total:.2f}. La tienda destino debe confirmar la recepción."
+                            if a_tienda else f"✅ Venta #{idv} registrada por \\${total:.2f}.")
                         st.rerun()
                     except ReglaNegocioError as e:
                         st.error(f"❌ {e}")
@@ -148,7 +148,7 @@ def mostrar_ventas():
         if not ventas:
             st.info("📭 No hay ventas en el rango seleccionado.")
         else:
-            st.caption(f"{len(ventas)} ventas · ${sum(float(v['Total']) for v in ventas):,.2f}")
+            st.caption(f"{len(ventas)} ventas · \\${sum(float(v['Total']) for v in ventas):,.2f}")
             st.dataframe(ventas, width="stretch", hide_index=True,
                          column_config={"Total": st.column_config.NumberColumn(format="$%.2f")})
             sel = st.selectbox("Ver detalle", ventas, format_func=lambda x: f"Venta #{x['ID']}")
