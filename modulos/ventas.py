@@ -4,6 +4,7 @@ import streamlit as st
 
 from config.conexion import consultar
 from modulos.negocio import ReglaNegocioError, ahora_sv, registrar_venta
+from modulos.formato import tabla
 
 
 def obtener_clientes(solo_tiendas):
@@ -149,10 +150,10 @@ def mostrar_ventas():
             st.info("📭 No hay ventas en el rango seleccionado.")
         else:
             st.caption(f"{len(ventas)} ventas · \\${sum(float(v['Total']) for v in ventas):,.2f}")
-            st.dataframe(ventas, width="stretch", hide_index=True,
+            tabla(ventas, width="stretch", hide_index=True,
                          column_config={"Total": st.column_config.NumberColumn(format="$%.2f")})
             sel = st.selectbox("Ver detalle", ventas, format_func=lambda x: f"Venta #{x['ID']}")
-            st.dataframe(consultar("""SELECT p.Nombre AS Producto, dv.Cantidad, dv.Precio_unitario,
+            tabla(consultar("""SELECT p.Nombre AS Producto, dv.Cantidad, dv.Precio_unitario,
                                              dv.Cantidad * dv.Precio_unitario AS Subtotal
                                       FROM Detalle_venta dv JOIN Producto p ON p.id_producto = dv.id_producto
                                       WHERE dv.id_venta = %s""", (sel["ID"],)),
