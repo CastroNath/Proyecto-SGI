@@ -8,6 +8,7 @@ from modulos.registro import mostrar_registro
 from modulos.ventas import mostrar_ventas
 from modulos.compras import mostrar_compras
 from modulos.inventario import mostrar_inventario
+from modulos.reportes import mostrar_reportes
 
 st.set_page_config(page_title="Red Cooperativa de Mujeres de Occidente", layout="wide")
 
@@ -96,7 +97,9 @@ if "vista_actual" not in st.session_state:
 if not st.session_state["sesion_iniciada"]:
     login()
 else:
-    st.caption(f"👤 Usuario: **{st.session_state['nombre_completo']}** | 🏪 ID Tienda: **{st.session_state['id_tienda']}** | 🔑 ID Rol: **{st.session_state['id_rol']}**")
+    st.caption(f"👤 Usuario: **{st.session_state['nombre_completo']}** | 🏪 Tienda: **{st.session_state['nombre_tienda']}**"
+               f"{' (Centro de Distribución)' if st.session_state.get('es_cd') else ''} | 🔑 Rol: **{st.session_state['rol']}**")
+    puede_gestionar = st.session_state["id_rol"] in (1, 2)  # Administrador o Encargado
     
     if st.session_state["vista_actual"] == "menu_principal":
         st.markdown("<h2 style='text-align: center; margin-bottom: 30px;'>Red Cooperativa de Mujeres de Occidente</h2>", unsafe_allow_html=True)
@@ -126,7 +129,11 @@ else:
                     st.error("⛔ Acceso denegado. Solo el Administrador General puede gestionar cuentas.")
         with f2:
             if st.button("*📊* **Reportes y Consultas** `Movimientos y reportes por tienda o globales`", key="btn_rep", type="primary"):
-                st.info("Módulo en construcción (Próxima fase).")
+                if puede_gestionar:
+                    st.session_state["vista_actual"] = "reportes"
+                    st.rerun()
+                else:
+                    st.error("⛔ Los reportes están disponibles para Administrador y Encargados.")
 
     elif st.session_state["vista_actual"] == "registra_info":
         st.markdown("<h3 style='text-align: center; margin-bottom: 25px;'>✏️ Catálogos y Registros</h3>", unsafe_allow_html=True)
@@ -156,9 +163,12 @@ else:
                 st.session_state["vista_actual"] = "form_venta"
                 st.rerun()
         with cv2:
-            if st.button("*📥* **Registrar Compra** `Entrada de mercadería de proveedores al inventario`", key="sub_compra", type="primary"):
-                st.session_state["vista_actual"] = "form_compra"
-                st.rerun()
+            if st.button("*📥* **Registrar Compra** `Órdenes, pedidos al CD y recepción de mercadería`", key="sub_compra", type="primary"):
+                if puede_gestionar:
+                    st.session_state["vista_actual"] = "form_compra"
+                    st.rerun()
+                else:
+                    st.error("⛔ Solo Administrador o Encargado pueden registrar compras.")
 
     elif st.session_state["vista_actual"] == "administracion":
         mostrar_registro()
@@ -176,6 +186,8 @@ else:
         mostrar_compras()
     elif st.session_state["vista_actual"] == "inventario":
         mostrar_inventario()
+    elif st.session_state["vista_actual"] == "reportes":
+        mostrar_reportes()
 
     st.markdown("<br>", unsafe_allow_html=True)
     formularios_catalogo = ["form_producto", "form_cliente", "form_proveedor", "form_categoria"]
@@ -207,6 +219,5 @@ else:
             st.rerun()
             
     if st.button("🚪 Cerrar sesión"):
-        st.session_state["sesion_iniciada"] = False
-        st.session_state["vista_actual"] = "menu_principal"
+        st.session_state.clear()  # borra también carritos y datos del usuario anterior
         st.rerun()
