@@ -2,133 +2,133 @@ import streamlit as st
 import mysql.connector
 from config.conexion import obtener_conexion
 
-def limpiar_codigo_barras():
-    # Elimina cualquier letra o espacio y corta estrictamente a 13 dígitos
-    texto = st.session_state.get("input_cod_prod", "")
-    solo_num = "".join(filter(str.isdigit, texto))[:13]
-    st.session_state["input_cod_prod"] = solo_num
+def es_centro_distribucion(id_tienda):
+    cx = obtener_conexion()
+    if not cx: return False
+    try:
+        cur = cx.cursor(dictionary=True)
+        cur.execute("SELECT Nombre, Tipo FROM Tienda WHERE id_tienda = %s", (id_tienda,))
+        t = cur.fetchone()
+        if t:
+            nom = (t["Nombre"] or "").lower()
+            tip = (t["Tipo"] or "").lower()
+            return "distribuci" in nom or "distribuci" in tip
+        return False
+    finally:
+        cur.close(); cx.close()
 
 def obtener_categorias():
-    conexion = obtener_conexion()
-    if not conexion:
-        return []
+    cx = obtener_conexion()
+    if not cx: return []
     try:
-        cursor = conexion.cursor(dictionary=True)
-        cursor.execute("SELECT id_categoria, Nombre FROM Categoria")
-        return cursor.fetchall()
+        cur = cx.cursor(dictionary=True)
+        cur.execute("SELECT id_categoria, Nombre FROM Categoria ORDER BY Nombre")
+        return cur.fetchall()
     finally:
-        cursor.close()
-        conexion.close()
+        cur.close(); cx.close()
 
-def es_centro_distribucion(id_tienda):
-    conexion = obtener_conexion()
-    if not conexion:
-        return False
+def generar_siguiente_codigo():
+    cx = obtener_conexion()
+    if not cx: return "7411000000001"
     try:
-        cursor = conexion.cursor(dictionary=True)
-        cursor.execute("SELECT Tipo FROM Tienda WHERE id_tienda = %s", (id_tienda,))
-        tienda = cursor.fetchone()
-        if tienda and tienda["Tipo"] and "distribuci" in tienda["Tipo"].lower():
-            return True
-        return False
+        cur = cx.cursor(dictionary=True)
+        cur.execute("SELECT MAX(id_producto) AS ultimo FROM Producto")
+        res = cur.fetchone()
+        sig = (res["ultimo"] or 0) + 1
+        return f"7411{sig:09d}"
     finally:
-        cursor.close()
-        conexion.close()
+        cur.close(); cx.close()
+
+def obtener_catalogo_completo():
+    cx = obtener_conexion()
+    if not cx: return []
+    try:
+        cur = cx.cursor(dictionary=True)
+        cur.execute("""
+            SELECT p.id_producto AS ID, p.Codigo_barras AS Código, p.Nombre AS Producto, 
+                   c.Nombre AS Categoría, p.Unidad_medida AS Unidad
+            FROM Producto p
+            INNER JOIN Categoria c ON p.id_categoria = c.id_categoria
+            ORDER BY p.id_producto ASC
+        """)
+        return cur.fetchall()
+    finally:
+        cur.close(); cx.close()
 
 def mostrar_productos():
-    st.header("📦 Gestión de Productos")
+    st.header("📦 Catálogo de Productos")
+    id_tienda = st.session_state.get("id_tienda")
+    es_cd = es_centro_distribucion(id_tienda)
 
-    # Regla de negocio: El Centro de Distribución no registra productos nuevos
-    if es_centro_distribucion(st.session_state.get("id_tienda")):
-        st.error("⛔ Acceso restringido: El Centro de Distribución opera únicamente con el catálogo existente y no registra productos nuevos.")
+    # Si pertenece al Centro de Distribución, bloquear creación y mostrar solo el catálogo existente
+    if es_cd:
+        st.info("🏢 **Modo Centro de Distribución:** Según las reglas operativas, el Centro de Distribución opera únicamente con el catálogo existente y no registra productos nuevos.")
+        catalogo = obtener_catalogo_completo()
+        if catalogo:
+            st.subheader("Productos Disponibles en el Catálogo Global")
+            st.dataframe(catalogo, use_container_width=True, hide_index=True)
+        else:
+            st.warning("📭 Aún no hay productos registrados en el catálogo.")
         return
 
-    # 1. Limpiar campos antes de dibujarlos
-    if st.session_state.get("limpiar_campos_prod", False):
-        st.session_state["input_nombre_prod"] = ""
-        st.session_state["input_unidad_prod"] = "Unidad"
-        st.session_state["input_cod_prod"] = ""
-        st.session_state["limpiar_campos_prod"] = False
+    # Si pertenece a una Tienda Minorista, permitir registrar y consultar
+    tab1, tab2 = st.tabs(["➕ Registrar Nuevo Producto", "📋 Consultar Catálogo Global"])
 
-    # 2. Mensaje de éxito
-    if st.session_state.get("msg_exito_prod"):
-        st.success(st.session_state["msg_exito_prod"])
-        st.session_state["msg_exito_prod"] = ""
+    with tab1:
+        if st.session_state.get("limpiar_prod", False):
+            st.session_state["prod_nom"] = ""
+            st.session_state["prod_uni"] = "Unidad"
+            st.session_state["limpiar_prod"] = False
 
-    # 3. Inicializar claves
-    if "input_nombre_prod" not in st.session_state:
-        st.session_state["input_nombre_prod"] = ""
-    if "input_unidad_prod" not in st.session_state:
-        st.session_state["input_unidad_prod"] = "Unidad"
-    if "input_cod_prod" not in st.session_state:
-        st.session_state["input_cod_prod"] = ""
+        if st.session_state.get("ok_prod"):
+            st.success(st.session_state.pop("ok_prod"))
 
-    categorias = obtener_categorias()
-    if not categorias:
-        st.warning("⚠️ Primero debes registrar al menos una categoría en el módulo de Categorías.")
-        return
+        if "prod_nom" not in st.session_state: st.session_state["prod_nom"] = ""
+        if "prod_uni" not in st.session_state: st.session_state["prod_uni"] = "Unidad"
 
-    # 4. Campos del formulario
-    nombre = st.text_input("Nombre del Producto", key="input_nombre_prod")
-    categoria_sel = st.selectbox("Categoría", categorias, format_func=lambda x: x["Nombre"])
-    
-    unidad = st.selectbox(
-        "Unidad de Medida",
-        ["Unidad", "Libra", "Kilogramo", "Gramo", "Onza", "Litro", "Mililitro", "Caja", "Paquete", "Saco", "Docena"],
-        key="input_unidad_prod"
-    )
-    
-    codigo_barras = st.text_input(
-        "Código de Barras",
-        max_chars=13,
-        placeholder="7410000000000",
-        key="input_cod_prod",
-        on_change=limpiar_codigo_barras
-    )
-
-    # 5. Validación y guardado
-    if st.button("Guardar Producto"):
-        if not nombre.strip():
-            st.warning("⚠️ El nombre del producto es obligatorio.")
-            return
-            
-        cod_limpio = "".join(filter(str.isdigit, codigo_barras))
-        if len(cod_limpio) != 13:
-            st.error("❌ El código de barras es obligatorio y debe tener exactamente 13 dígitos numéricos.")
+        categorias = obtener_categorias()
+        if not categorias:
+            st.warning("⚠️ Primero debes crear al menos una categoría en el catálogo.")
             return
 
-        conexion = obtener_conexion()
-        if conexion:
-            try:
-                cursor = conexion.cursor()
-                # Validar que no se repita el nombre o el código de barras
-                cursor.execute(
-                    "SELECT id_producto FROM Producto WHERE LOWER(Nombre) = LOWER(%s) OR Codigo_barras = %s",
-                    (nombre.strip(), cod_limpio)
-                )
-                if cursor.fetchone():
-                    st.error("❌ Ya existe un producto registrado con ese mismo nombre o código de barras.")
-                    return
+        codigo_auto = generar_siguiente_codigo()
+        st.text_input("Código de Barras (EAN-13 Automático)", value=codigo_auto, disabled=True)
+        
+        nombre = st.text_input("Nombre del Producto", key="prod_nom")
+        cat_sel = st.selectbox("Categoría", categorias, format_func=lambda x: x["Nombre"])
+        unidad = st.selectbox(
+            "Unidad de Medida",
+            ["Unidad", "Libra", "Kilogramo", "Litro", "Mililitro", "Paquete", "Caja", "Saco"],
+            key="prod_uni"
+        )
 
-                consulta = """
-                    INSERT INTO Producto (id_categoria, Nombre, Unidad_medida, Codigo_barras)
-                    VALUES (%s, %s, %s, %s)
-                """
-                cursor.execute(consulta, (
-                    categoria_sel["id_categoria"],
-                    nombre.strip(),
-                    unidad,
-                    cod_limpio
-                ))
-                conexion.commit()
+        if st.button("Guardar Producto", key="btn_save_prod"):
+            if not nombre.strip():
+                st.warning("⚠️ El nombre del producto es obligatorio.")
+            else:
+                cx = obtener_conexion()
+                if cx:
+                    try:
+                        cur = cx.cursor()
+                        cur.execute(
+                            "INSERT INTO Producto (id_categoria, Nombre, Unidad_medida, Codigo_barras) VALUES (%s, %s, %s, %s)",
+                            (cat_sel["id_categoria"], nombre.strip(), unidad, codigo_auto)
+                        )
+                        cx.commit()
+                        st.session_state["ok_prod"] = f"✅ Producto '{nombre.strip()}' registrado con código {codigo_auto}."
+                        st.session_state["limpiar_prod"] = True
+                        st.rerun()
+                    except mysql.connector.IntegrityError:
+                        st.error("❌ Ya existe un producto con ese nombre o código de barras.")
+                    except Exception as e:
+                        st.error(f"Error al guardar producto: {e}")
+                    finally:
+                        cur.close(); cx.close()
 
-                st.session_state["msg_exito_prod"] = f"✅ Producto '{nombre.strip()}' agregado al catálogo."
-                st.session_state["limpiar_campos_prod"] = True
-                st.rerun()
-            except mysql.connector.IntegrityError:
-                st.error("❌ El código de barras ingresado ya pertenece a otro producto.")
-            except Exception as e:
-                st.error(f"Error al registrar producto: {e}")
-            finally:
-                cursor.close()
-                conexion.close()
+    with tab2:
+        catalogo = obtener_catalogo_completo()
+        if catalogo:
+            st.subheader("Productos Registrados en la Red")
+            st.dataframe(catalogo, use_container_width=True, hide_index=True)
+        else:
+            st.info("📭 No hay productos registrados aún.")
