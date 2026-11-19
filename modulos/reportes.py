@@ -7,6 +7,7 @@ import streamlit as st
 
 from config.conexion import consultar
 from modulos.inventario import selector_tienda
+from modulos.formato import tabla
 
 DINERO = st.column_config.NumberColumn(format="$%.2f")
 
@@ -83,7 +84,7 @@ def mostrar_reportes():
                                        - df["Existencia"] - df["En_transito"]).apply(lambda x: max(0, math.ceil(x)))
             urgentes = df[df["Comprar_ahora"]].sort_values("Dias_de_stock", na_position="last")
             st.metric("Productos que hay que comprar ya", len(urgentes))
-            st.dataframe(urgentes if st.toggle("Solo los que hay que comprar", value=True) else df,
+            tabla(urgentes if st.toggle("Solo los que hay que comprar", value=True) else df,
                          width="stretch", hide_index=True)
 
     # -----------------------------------------------------------------
@@ -107,7 +108,7 @@ def mostrar_reportes():
                           WHERE DATE(v.Fecha) BETWEEN %s AND %s {ft}
                           GROUP BY p.id_producto, p.Nombre, c.Nombre ORDER BY Ingreso DESC""", (desde, hasta) + pt)
             st.subheader("Comportamiento de productos")
-            st.dataframe(top, width="stretch", hide_index=True, column_config={"Ingreso": DINERO})
+            tabla(top, width="stretch", hide_index=True, column_config={"Ingreso": DINERO})
             sin_mov = _df(f"""SELECT t.Nombre AS Tienda, p.Nombre AS Producto, i.Existencia
                               FROM Inventario i JOIN Producto p ON p.id_producto = i.id_producto
                               JOIN Tienda t ON t.id_tienda = i.id_tienda
@@ -117,7 +118,7 @@ def mostrar_reportes():
                                                   AND DATE(v.Fecha) BETWEEN %s AND %s)""", pt + (desde, hasta))
             if not sin_mov.empty:
                 st.subheader("Productos sin ventas en el período (inventario inmovilizado)")
-                st.dataframe(sin_mov, width="stretch", hide_index=True)
+                tabla(sin_mov, width="stretch", hide_index=True)
 
     # -----------------------------------------------------------------
     with t3:
@@ -132,9 +133,9 @@ def mostrar_reportes():
         else:
             resumen = mov.groupby("Tipo").agg(Lineas=("Cantidad", "size"), Unidades=("Cantidad", "sum"),
                                               Importe=("Importe", "sum")).reset_index()
-            st.dataframe(resumen, width="stretch", hide_index=True, column_config={"Importe": DINERO})
+            tabla(resumen, width="stretch", hide_index=True, column_config={"Importe": DINERO})
             tipos = st.multiselect("Tipo de movimiento", sorted(mov["Tipo"].unique()), default=sorted(mov["Tipo"].unique()))
-            st.dataframe(mov[mov["Tipo"].isin(tipos)], width="stretch", hide_index=True,
+            tabla(mov[mov["Tipo"].isin(tipos)], width="stretch", hide_index=True,
                          column_config={"Precio": DINERO, "Importe": DINERO})
 
     # -----------------------------------------------------------------
@@ -149,7 +150,7 @@ def mostrar_reportes():
                              (SELECT COUNT(*) FROM v_inventario vi WHERE vi.id_tienda = t.id_tienda
                                       AND vi.Estado_stock <> 'OK') AS Productos_a_reponer
                       FROM Tienda t ORDER BY t.Tipo = 'CD' DESC, t.Nombre""", (desde, hasta, desde, hasta))
-        st.dataframe(comp, width="stretch", hide_index=True,
+        tabla(comp, width="stretch", hide_index=True,
                      column_config={"Ventas": DINERO, "Compras": DINERO, "Valor_inventario": DINERO})
         if not comp.empty:
             st.bar_chart(comp.set_index("Tienda")[["Ventas", "Compras"]])
@@ -164,5 +165,5 @@ def mostrar_reportes():
         if not ev.empty:
             ev["Ahorro_por_unidad"] = (ev["Costo_externo"] - ev["Costo_CD"]).round(2)
             ev["CD_autorizado"] = ev["CD_autorizado"].map({1: "✅ Sí", 0: "❌ No"})
-            st.dataframe(ev, width="stretch", hide_index=True,
+            tabla(ev, width="stretch", hide_index=True,
                          column_config={"Costo_CD": DINERO, "Costo_externo": DINERO, "Ahorro_por_unidad": DINERO})
