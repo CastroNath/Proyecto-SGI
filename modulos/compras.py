@@ -50,6 +50,29 @@ def demanda_real(id_tienda, id_producto):
     return float(r["q"]) / DIAS_DEMANDA if r else 0.0
 
 
+def aviso_catalogo(prov_sel, prod_sel, comp, info_cd):
+    """Avisa si el proveedor elegido no tiene el producto en su catálogo y dice quién sí lo tiene."""
+    if not (prov_sel and prod_sel):
+        return
+    if prov_sel["id_tienda_cd"]:
+        tiene = bool(info_cd and info_cd["Precio_CD"] and (info_cd["Existencia"] or 0) > 0)
+    else:
+        tiene = precio_lista(prod_sel["id_producto"], prov_sel["id_proveedor"]) is not None
+    if tiene:
+        return
+    otros = [f"**{f['Proveedor'].replace('🏢 ', '')}** (\\${float(f['Precio']):.2f})" for f in comp]
+    nombre_prov = "El Centro de Distribución" if prov_sel["id_tienda_cd"] else f"**{prov_sel['Nombre']}**"
+    msg = f"⚠️ {nombre_prov} no tiene **{prod_sel['Nombre']}** en su catálogo."
+    if otros:
+        msg += " Lo venden: " + ", ".join(otros) + ". Para comprarlo, cambia de proveedor"
+        msg += "." if not prov_sel["id_tienda_cd"] else " (elige un proveedor externo)."
+        if not prov_sel["id_tienda_cd"]:
+            msg += " Si este proveedor sí te lo vende, escribe el precio acordado y quedará en su catálogo."
+    else:
+        msg += " Ningún proveedor lo tiene registrado todavía; escribe el precio acordado."
+    st.warning(msg)
+
+
 def datos_cd_producto(id_producto):
     """Precio de venta del CD a las tiendas, su existencia, el mejor precio externo y si está autorizado."""
     return consultar_uno("""SELECT e.Precio_CD, e.Mejor_precio_externo, e.CD_autorizado, i.Existencia
@@ -106,6 +129,7 @@ def mostrar_compras():
         info_cd = datos_cd_producto(prod_sel["id_producto"]) if prod_sel else None
         if prod_sel:
             comp = obtener_comparativa_producto(prod_sel["id_producto"], es_cd, info_cd)
+            aviso_catalogo(prov_sel, prod_sel, comp, info_cd)
             if comp:
                 with st.expander("📊 Comparativa de precios por proveedor", expanded=True):
                     tabla(comp)
@@ -138,8 +162,6 @@ def mostrar_compras():
             tiene_venc = st.checkbox("📅 Este lote tiene fecha de vencimiento", key=f"venc_{r}_{len(carrito)}")
         lista = (precio_lista(prod_sel["id_producto"], prov_sel["id_proveedor"])
                  if prod_sel and prov_sel and not al_cd else None)
-        if prod_sel and prov_sel and not al_cd and lista is None:
-            st.caption("Este proveedor no tiene precio registrado para el producto: escribe el precio acordado.")
         clave_item = f"{r}_{len(carrito)}_{prod_sel['id_producto'] if prod_sel else 0}_{prov_sel['id_proveedor'] if prov_sel else 0}"
         with st.form(f"item_compra_{clave_item}"):
             c1, c2 = st.columns(2)
