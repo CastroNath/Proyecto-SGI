@@ -159,11 +159,14 @@ def mostrar_reportes():
     if t5 is None:
         return
     with t5:
-        st.caption("Regla de negocio: el CD solo puede abastecer a una tienda si su costo global de adquisición "
-                   "(promedio ponderado) es menor que lo que pagan las tiendas a proveedores externos.")
-        ev = _df("SELECT Producto, Costo_CD, Costo_externo, CD_autorizado FROM v_evaluacion_cd ORDER BY Producto")
+        st.caption("Regla de negocio: la tienda compra al CD solo si el CD le vende más barato que el "
+                   "proveedor externo más barato. Costo CD = lo que pagó el CD (promedio ponderado, visible solo "
+                   "para Administrador y CD).")
+        ev = _df("""SELECT Producto, Costo_CD, Precio_CD, Mejor_precio_externo, CD_autorizado
+                    FROM v_evaluacion_cd ORDER BY CD_autorizado DESC, Producto""")
         if not ev.empty:
-            ev["Ahorro_por_unidad"] = (ev["Costo_externo"] - ev["Costo_CD"]).round(2)
+            ev["Ahorro_tienda_por_unidad"] = (ev["Mejor_precio_externo"] - ev["Precio_CD"]).round(2)
+            ev["Margen_CD_por_unidad"] = (ev["Precio_CD"] - ev["Costo_CD"]).round(2)
             ev["CD_autorizado"] = ev["CD_autorizado"].map({1: "✅ Sí", 0: "❌ No"})
             tabla(ev, width="stretch", hide_index=True,
-                         column_config={"Costo_CD": DINERO, "Costo_externo": DINERO, "Ahorro_por_unidad": DINERO})
+                         column_config={"Margen_CD_por_unidad": DINERO})
