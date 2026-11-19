@@ -130,7 +130,7 @@ def mostrar_inventario():
                                    format_func=lambda x: f"{x['Nombre']} ({x['Unidad_medida']})")
                 actual_min, actual_precio = int(sel["Stock_minimo"]), float(sel["Precio_venta"])
                 st.caption(f"Actual: existencia **{sel['Existencia']}** · stock mínimo **{actual_min}** · "
-                           f"precio **${actual_precio:.2f}**")
+                           f"precio **\\${actual_precio:.2f}**")
                 if sel["Sugerido"] is None:
                     st.caption(f"Sin ventas en los últimos {DIAS_DEMANDA} días: no hay datos para calcularlo; "
                                "se mantiene el valor actual.")
@@ -156,7 +156,7 @@ def mostrar_inventario():
                                     (int(minimo), round(precio, 2), sel["id_inventario"]))
                         cx.commit(); cur.close(); cx.close()
                         st.session_state["ok_ajuste"] = (f"✅ {sel['Nombre']}: stock mínimo {actual_min} → {int(minimo)}, "
-                                                         f"precio ${actual_precio:.2f} → ${precio:.2f}.")
+                                                         f"precio \\${actual_precio:.2f} → \\${precio:.2f}.")
                         st.rerun()
 
             st.subheader("Bajas de inventario")
