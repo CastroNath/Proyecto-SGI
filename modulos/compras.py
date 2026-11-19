@@ -17,39 +17,27 @@ def obtener_proveedores(es_cd):
                      "ORDER BY id_tienda_cd IS NULL, Nombre")
 
 
-def obtener_comparativa_producto(id_producto, es_cd):
-    """CD / Administrador: último precio de cada proveedor (ProductoxProveedor).
-    Tiendas: solo precios que pagaron las TIENDAS a proveedores externos, más el precio de venta del CD.
-    Así la tienda compara lo que realmente puede pagar sin conocer el costo del CD."""
-    if es_cd:
-        return consultar("""SELECT p.Nombre AS Proveedor, p.Tipo, pxp.Ultimo_precio AS Precio,
-                                   pxp.Fecha_ultima_compra
-                            FROM ProductoxProveedor pxp JOIN Proveedor p ON p.id_proveedor = pxp.id_proveedor
-                            WHERE pxp.id_producto = %s ORDER BY pxp.Ultimo_precio""", (id_producto,))
-    filas = consultar("""
-        SELECT pr.Nombre AS Proveedor, pr.Tipo, dc.Precio_compra AS Precio,
-               DATE(c.Fecha_recepcion) AS Fecha_ultima_compra
-        FROM Compra c
-        JOIN Detalle_compra dc ON dc.id_compra = c.id_compra
-        JOIN Proveedor pr      ON pr.id_proveedor = c.id_proveedor
-        JOIN Tienda t          ON t.id_tienda = c.id_tienda
-        WHERE dc.id_producto = %s AND c.Estado = 'Recibida' AND t.Tipo <> 'CD' AND pr.id_tienda_cd IS NULL
-          AND dc.id_detalle_compra = (
-              SELECT d2.id_detalle_compra FROM Compra c2
-              JOIN Detalle_compra d2 ON d2.id_compra = c2.id_compra
-              JOIN Tienda t2 ON t2.id_tienda = c2.id_tienda
-              WHERE d2.id_producto = dc.id_producto AND c2.id_proveedor = c.id_proveedor
-                AND c2.Estado = 'Recibida' AND t2.Tipo <> 'CD'
-              ORDER BY c2.Fecha_recepcion DESC, d2.id_detalle_compra DESC LIMIT 1)
-        ORDER BY dc.Precio_compra""", (id_producto,))
-    cd = consultar_uno("""SELECT pr.Nombre AS Proveedor, pr.Tipo, i.Precio_venta AS Precio, e.CD_autorizado, i.Existencia
-                          FROM Proveedor pr JOIN Tienda t ON t.id_tienda = pr.id_tienda_cd
-                          JOIN Inventario i ON i.id_tienda = t.id_tienda AND i.id_producto = %s
-                          JOIN v_evaluacion_cd e ON e.id_producto = i.id_producto""", (id_producto,))
-    if cd and cd["CD_autorizado"] and cd["Existencia"] > 0:
-        filas.append({"Proveedor": f"🏢 {cd['Proveedor']}", "Tipo": cd["Tipo"], "Precio": cd["Precio"],
-                      "Fecha_ultima_compra": None})
-        filas.sort(key=lambda f: float(f["Precio"]))
+def precio_lista(id_producto, id_proveedor):
+    """Precio de lista del proveedor para ese producto (ProductoxProveedor), o None."""
+    r = consultar_uno("SELECT Ultimo_precio FROM ProductoxProveedor WHERE id_producto=%s AND id_proveedor=%s",
+                      (id_producto, id_proveedor))
+    return float(r["Ultimo_precio"]) if r and r["Ultimo_precio"] is not None else None
+
+
+def obtener_comparativa_producto(id_producto, es_cd, info_cd):
+    """Precios de lista de los proveedores externos (ProductoxProveedor) y, para las tiendas,
+    el precio de venta del CD. Ordenado de más barato a más caro; el primero se marca como mejor opción.
+    Nunca muestra el costo de compra del CD."""
+    filas = consultar("""SELECT pr.Nombre AS Proveedor, pr.Tipo, pxp.Ultimo_precio AS Precio
+                         FROM ProductoxProveedor pxp JOIN Proveedor pr ON pr.id_proveedor = pxp.id_proveedor
+                         WHERE pxp.id_producto = %s AND pr.id_tienda_cd IS NULL AND pxp.Ultimo_precio IS NOT NULL""",
+                      (id_producto,))
+    if not es_cd and info_cd and info_cd["Precio_CD"] and (info_cd["Existencia"] or 0) > 0:
+        filas.append({"Proveedor": "🏢 Centro de Distribución", "Tipo": "Centro de Distribución",
+                      "Precio": info_cd["Precio_CD"]})
+    filas.sort(key=lambda f: float(f["Precio"]))
+    for n, f in enumerate(filas):
+        f["Mejor opción"] = "✅ Más barato" if n == 0 else ""
     return filas
 
 
@@ -63,10 +51,11 @@ def demanda_real(id_tienda, id_producto):
 
 
 def datos_cd_producto(id_producto):
-    return consultar_uno("""SELECT i.Existencia, i.Precio_venta, e.Costo_CD, e.Costo_externo, e.CD_autorizado
+    """Precio de venta del CD a las tiendas, su existencia, el mejor precio externo y si está autorizado."""
+    return consultar_uno("""SELECT e.Precio_CD, e.Mejor_precio_externo, e.CD_autorizado, i.Existencia
                             FROM v_evaluacion_cd e
                             LEFT JOIN Inventario i ON i.id_producto = e.id_producto
-                                 AND i.id_tienda = (SELECT id_tienda FROM Tienda WHERE Tipo='CD' LIMIT 1)
+                                 AND i.id_tienda = (SELECT MIN(id_tienda) FROM Tienda WHERE Tipo = 'CD')
                             WHERE e.id_producto = %s""", (id_producto,))
 
 
@@ -116,24 +105,29 @@ def mostrar_compras():
 
         info_cd = datos_cd_producto(prod_sel["id_producto"]) if prod_sel else None
         if prod_sel:
-            comp = obtener_comparativa_producto(prod_sel["id_producto"], es_cd)
+            comp = obtener_comparativa_producto(prod_sel["id_producto"], es_cd, info_cd)
             if comp:
                 with st.expander("📊 Comparativa de precios por proveedor", expanded=True):
-                    tabla(comp, width="stretch", hide_index=True,
-                                 column_config={"Precio": st.column_config.NumberColumn(format="$%.2f"),
-                                                "Fecha_ultima_compra": st.column_config.DateColumn("Última compra")})
+                    tabla(comp)
+            else:
+                st.info("Ningún proveedor tiene precio registrado para este producto todavía.")
             if not es_cd and info_cd:
-                # La tienda solo ve el precio al que le vende el CD, nunca su costo
-                precio_cd = float(info_cd["Precio_venta"] or 0)
-                if info_cd["CD_autorizado"] and (info_cd["Existencia"] or 0) > 0:
-                    st.success(f"🏢 Disponible en el Centro de Distribución a **\\${precio_cd:.2f}** por unidad. "
-                               f"Existencia en el CD: **{info_cd['Existencia']}**.")
+                # Regla: comprar al CD solo si vende más barato que el mejor proveedor externo
+                mejor_ext = info_cd["Mejor_precio_externo"]
+                externo = comp[0]["Proveedor"] if comp and not comp[0]["Proveedor"].startswith("🏢") else None
+                hay_stock = (info_cd["Existencia"] or 0) > 0
+                if info_cd["CD_autorizado"] and hay_stock:
+                    st.success(f"✅ **Compra al Centro de Distribución**: vende a **\\${float(info_cd['Precio_CD']):.2f}**"
+                               + (f", más barato que el mejor proveedor externo (\\${float(mejor_ext):.2f})"
+                                  if mejor_ext is not None else "")
+                               + f". Existencia en el CD: **{info_cd['Existencia']}**.")
                 elif info_cd["CD_autorizado"]:
-                    st.warning("🏢 El Centro de Distribución ofrece este producto, pero ahora no tiene existencias. "
-                               "Puedes comprarlo a un proveedor externo.")
-                else:
-                    st.info("💡 El Centro de Distribución no ofrece este producto en este momento. "
-                            "Cómpralo a un proveedor externo.")
+                    st.warning("🏢 El CD sería la opción más barata, pero ahora no tiene existencias. "
+                               f"Compra a {externo or 'un proveedor externo'}.")
+                elif externo:
+                    st.info(f"💡 **Compra a {externo}** (\\${float(mejor_ext):.2f}): "
+                            + ("el CD no maneja este producto." if not info_cd["Precio_CD"]
+                               else "el Centro de Distribución no es la opción más barata para este producto."))
 
         st.divider()
         # Fuera del formulario: así la fecha aparece en cuanto se marca la casilla
@@ -142,7 +136,12 @@ def mostrar_compras():
             st.caption("📅 El vencimiento se hereda automáticamente de los lotes que despacha el CD.")
         else:
             tiene_venc = st.checkbox("📅 Este lote tiene fecha de vencimiento", key=f"venc_{r}_{len(carrito)}")
-        with st.form(f"item_compra_{r}_{len(carrito)}"):
+        lista = (precio_lista(prod_sel["id_producto"], prov_sel["id_proveedor"])
+                 if prod_sel and prov_sel and not al_cd else None)
+        if prod_sel and prov_sel and not al_cd and lista is None:
+            st.caption("Este proveedor no tiene precio registrado para el producto: escribe el precio acordado.")
+        clave_item = f"{r}_{len(carrito)}_{prod_sel['id_producto'] if prod_sel else 0}_{prov_sel['id_proveedor'] if prov_sel else 0}"
+        with st.form(f"item_compra_{clave_item}"):
             c1, c2 = st.columns(2)
             with c1:
                 cantidad = st.number_input("Cantidad solicitada", min_value=0, step=1)
@@ -155,12 +154,14 @@ def mostrar_compras():
                                                      "Sirve para calcular cuándo volver a pedir.")
             with c2:
                 if al_cd:
-                    precio_cd = float(info_cd["Precio_venta"]) if info_cd and info_cd["Precio_venta"] else 0.0
+                    precio_cd = float(info_cd["Precio_CD"]) if info_cd and info_cd["Precio_CD"] else 0.0
                     st.number_input("Precio unitario ($ - tarifa del CD)", value=precio_cd, format="%.2f", disabled=True)
                     precio_compra = precio_cd
                 else:
                     precio_compra = st.number_input("Precio de compra unitario ($)", min_value=0.0, step=0.05,
-                                                    format="%.2f")
+                                                    format="%.2f", value=lista or 0.0,
+                                                    help="Se llena con el precio de lista del proveedor; "
+                                                         "cámbialo si te dio otro precio.")
                 margen = st.number_input("Margen sobre costo (%)", min_value=0, max_value=200,
                                          value=int((MARGEN_VENTA - 1) * 100))
                 fecha_venc = (st.date_input("Fecha de vencimiento", min_value=date.today() + timedelta(days=1))
