@@ -115,7 +115,7 @@ def mostrar_inventario():
                                        "Demanda diaria": round(i["Demanda"], 2), "Lead time (días)": i["Lead_time"],
                                        "Actual": int(i["Stock_minimo"]), "Sugerido": i["Sugerido"]} for i in cambios],
                                      width="stretch", hide_index=True)
-                        if st.button("Aplicar el stock mínimo sugerido a todos", type="primary"):
+                        if st.button("Aplicar el stock mínimo sugerido a todos"):
                             cx = obtener_conexion(); cur = cx.cursor()
                             cur.executemany("UPDATE Inventario SET Stock_minimo=%s WHERE id_inventario=%s",
                                             [(i["Sugerido"], i["id_inventario"]) for i in cambios])
