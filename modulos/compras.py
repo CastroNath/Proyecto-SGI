@@ -1,6 +1,6 @@
 import streamlit as st
 import math
-from datetime import datetime, date, timedelta
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from config.conexion import obtener_conexion
 
@@ -8,6 +8,32 @@ ZONA_SV = ZoneInfo("America/El_Salvador")
 
 def ahora_sv():
     return datetime.now(ZONA_SV).replace(tzinfo=None)
+
+def info_tienda(id_tienda):
+    cx = obtener_conexion()
+    if not cx: return None
+    try:
+        cur = cx.cursor(dictionary=True)
+        cur.execute("SELECT id_tienda, Nombre, Tipo FROM Tienda WHERE id_tienda = %s", (id_tienda,))
+        return cur.fetchone()
+    finally:
+        cur.close(); cx.close()
+
+def obtener_id_cd():
+    cx = obtener_conexion()
+    if not cx: return 1
+    try:
+        cur = cx.cursor(dictionary=True)
+        cur.execute("SELECT id_tienda FROM Tienda WHERE LOWER(Nombre) LIKE '%distribuci%' OR LOWER(Tipo) LIKE '%distribuci%' LIMIT 1")
+        r = cur.fetchone()
+        return r["id_tienda"] if r else 1
+    finally:
+        cur.close(); cx.close()
+
+def obtener_id_proveedor_cd(cur):
+    cur.execute("SELECT id_proveedor FROM Proveedor WHERE LOWER(Nombre) LIKE '%distribuci%' LIMIT 1")
+    r = cur.fetchone()
+    return r["id_proveedor"] if r else None
 
 def sincronizar_compras_en_transito():
     cx = obtener_conexion()
@@ -56,8 +82,7 @@ def confirmar_despacho_cd(id_venta, id_tienda_destino):
     try:
         cur = cx.cursor(dictionary=True)
         cur.execute("SELECT id_producto, Cantidad, Precio_unitario FROM Detalle_venta WHERE id_venta = %s", (id_venta,))
-        detalles = cur.fetchall()
-        for d in detalles:
+        for d in cur.fetchall():
             if not d["id_producto"]: continue
             precio_publico = round(float(d["Precio_unitario"]) * 1.20, 2)
             cur.execute("SELECT id_inventario FROM Inventario WHERE id_tienda = %s AND id_producto = %s LIMIT 1", (id_tienda_destino, d["id_producto"]))
@@ -68,7 +93,7 @@ def confirmar_despacho_cd(id_venta, id_tienda_destino):
                 cur.execute("INSERT INTO Inventario (id_tienda, id_producto, Existencia, Stock_minimo, Precio_venta) VALUES (%s, %s, %s, 2, %s)", (id_tienda_destino, d["id_producto"], d["Cantidad"], precio_publico))
         cur.execute("UPDATE Venta SET Estado = 'Entregada' WHERE id_venta = %s", (id_venta,))
         cx.commit()
-        return True, f"✅ Despacho #{id_venta} del Centro de Distribución recibido e ingresado al inventario."
+        return True, f"✅ Despacho #{id_venta} recibido e ingresado al inventario."
     except Exception as e:
         cx.rollback()
         return False, f"❌ Error al recibir despacho: {e}"
@@ -76,24 +101,20 @@ def confirmar_despacho_cd(id_venta, id_tienda_destino):
         if cur: cur.close()
         if cx: cx.close()
 
-def info_tienda(id_tienda):
+def obtener_comparativa_producto(id_producto):
+    """Consulta en ProductoxProveedor todos los proveedores que venden este producto ordenados por menor precio."""
     cx = obtener_conexion()
-    if not cx: return None
+    if not cx: return []
     try:
         cur = cx.cursor(dictionary=True)
-        cur.execute("SELECT id_tienda, Nombre, Tipo FROM Tienda WHERE id_tienda = %s", (id_tienda,))
-        return cur.fetchone()
-    finally:
-        cur.close(); cx.close()
-
-def obtener_id_cd():
-    cx = obtener_conexion()
-    if not cx: return 1
-    try:
-        cur = cx.cursor(dictionary=True)
-        cur.execute("SELECT id_tienda FROM Tienda WHERE LOWER(Nombre) LIKE '%distribuci%' OR LOWER(Tipo) LIKE '%distribuci%' LIMIT 1")
-        r = cur.fetchone()
-        return r["id_tienda"] if r else 1
+        cur.execute("""
+            SELECT p.id_proveedor, p.Nombre AS Proveedor, p.Tipo, pxp.Ultimo_precio, pxp.Fecha_ultima_compra
+            FROM ProductoxProveedor pxp
+            INNER JOIN Proveedor p ON pxp.id_proveedor = p.id_proveedor
+            WHERE pxp.id_producto = %s
+            ORDER BY pxp.Ultimo_precio ASC
+        """, (id_producto,))
+        return cur.fetchall()
     finally:
         cur.close(); cx.close()
 
@@ -110,25 +131,6 @@ def obtener_proveedores(es_cd):
     finally:
         cur.close(); cx.close()
 
-def obtener_productos_disponibles_cd():
-    """Trae únicamente productos con stock > 0 en el Centro de Distribución junto con su precio."""
-    id_cd = obtener_id_cd()
-    cx = obtener_conexion()
-    if not cx: return []
-    try:
-        cur = cx.cursor(dictionary=True)
-        cur.execute("""
-            SELECT i.id_inventario, p.id_producto, p.Nombre, p.Unidad_medida, p.Codigo_barras,
-                   i.Existencia, i.Precio_venta
-            FROM Inventario i
-            INNER JOIN Producto p ON i.id_producto = p.id_producto
-            WHERE i.id_tienda = %s AND i.Existencia > 0
-            ORDER BY p.Nombre
-        """, (id_cd,))
-        return cur.fetchall()
-    finally:
-        cur.close(); cx.close()
-
 def obtener_productos_catalogo():
     cx = obtener_conexion()
     if not cx: return []
@@ -139,7 +141,19 @@ def obtener_productos_catalogo():
     finally:
         cur.close(); cx.close()
 
-def registrar_orden_compra(id_tienda, nombre_tienda, id_usuario, prov_sel, carrito, total_compra):
+def obtener_stock_cd_producto(id_producto):
+    id_cd = obtener_id_cd()
+    cx = obtener_conexion()
+    if not cx: return 0, 0.0
+    try:
+        cur = cx.cursor(dictionary=True)
+        cur.execute("SELECT Existencia, Precio_venta FROM Inventario WHERE id_tienda = %s AND id_producto = %s LIMIT 1", (id_cd, id_producto))
+        r = cur.fetchone()
+        return (int(r["Existencia"]), float(r["Precio_venta"])) if r else (0, 0.0)
+    finally:
+        cur.close(); cx.close()
+
+def registrar_orden_compra(id_tienda, nombre_tienda, id_usuario, prov_sel, carrito, total_compra, es_cd_comprando):
     cx = obtener_conexion()
     if not cx: return False, "No hay conexión con la base de datos."
     cur = None
@@ -148,58 +162,48 @@ def registrar_orden_compra(id_tienda, nombre_tienda, id_usuario, prov_sel, carri
         fecha_reg = ahora_sv()
         es_compra_al_cd = "distribuci" in (prov_sel["Nombre"] or "").lower()
 
-        # CASO A: La Tienda está comprando directamente al Centro de Distribución (Comunicación bilateral)
         if es_compra_al_cd:
             id_cd = obtener_id_cd()
-            # Buscar el id_cliente que corresponde a la tienda que está comprando
             cur.execute("SELECT id_cliente FROM Cliente WHERE TRIM(LOWER(Nombre)) = TRIM(LOWER(%s)) LIMIT 1", (nombre_tienda,))
             cli_t = cur.fetchone()
             id_cliente_tienda = cli_t["id_cliente"] if cli_t else 1
 
-            # 1. Crear el despacho en la tabla Venta del Centro de Distribución ('En tránsito')
-            cur.execute("""
-                INSERT INTO Venta (id_tienda, id_usuario, id_cliente, Fecha, Total, Estado)
-                VALUES (%s, %s, %s, %s, %s, 'En tránsito')
-            """, (id_cd, id_usuario, id_cliente_tienda, fecha_reg, total_compra))
+            cur.execute("INSERT INTO Venta (id_tienda, id_usuario, id_cliente, Fecha, Total, Estado) VALUES (%s, %s, %s, %s, %s, 'En tránsito')", (id_cd, id_usuario, id_cliente_tienda, fecha_reg, total_compra))
             id_despacho = cur.lastrowid
 
             for item in carrito:
-                cur.execute("""
-                    INSERT INTO Detalle_venta (id_venta, id_producto, Cantidad, Precio_unitario)
-                    VALUES (%s, %s, %s, %s)
-                """, (id_despacho, item["id_producto"], item["cantidad"], item["precio_compra"]))
+                cur.execute("INSERT INTO Detalle_venta (id_venta, id_producto, Cantidad, Precio_unitario) VALUES (%s, %s, %s, %s)", (id_despacho, item["id_producto"], item["cantidad"], item["precio_compra"]))
                 id_det_v = cur.lastrowid
-
-                # Descontar del inventario del Centro de Distribución
-                cur.execute("""
-                    UPDATE Inventario
-                    SET Existencia = Existencia - %s, id_detalle_venta = %s
-                    WHERE id_tienda = %s AND id_producto = %s AND Existencia >= %s
-                """, (item["cantidad"], id_det_v, id_cd, item["id_producto"], item["cantidad"]))
+                cur.execute("UPDATE Inventario SET Existencia = Existencia - %s, id_detalle_venta = %s WHERE id_tienda = %s AND id_producto = %s AND Existencia >= %s", (item["cantidad"], id_det_v, id_cd, item["id_producto"], item["cantidad"]))
                 if cur.rowcount == 0:
-                    raise Exception(f"El Centro de Distribución no tiene suficiente stock de '{item['nombre']}'.")
+                    raise Exception(f"El Centro de Distribución no tiene stock suficiente de '{item['nombre']}'.")
 
-                # Actualizar el Punto de Reorden (Stock_minimo) en la tienda destino si ya tiene el producto
                 cur.execute("SELECT id_inventario FROM Inventario WHERE id_tienda = %s AND id_producto = %s LIMIT 1", (id_tienda, item["id_producto"]))
                 inv_t = cur.fetchone()
                 if inv_t:
                     cur.execute("UPDATE Inventario SET Stock_minimo = %s WHERE id_inventario = %s", (item["stock_minimo"], inv_t["id_inventario"]))
 
             cx.commit()
-            return True, f"🚚 Solicitud #{id_despacho} enviada al **Centro de Distribución** por **${total_compra:.2f}**. Aparecerá en tu pestaña **Pedidos en Tránsito** para confirmar cuando llegue."
+            return True, f"🚚 Solicitud #{id_despacho} enviada al **Centro de Distribución** por **${total_compra:.2f}**. Revisa tu pestaña **Pedidos en Tránsito**."
 
-        # CASO B: Compra a un Proveedor Externo
         max_lt = max(item["lead_time"] for item in carrito)
         fecha_est = fecha_reg + timedelta(days=max_lt)
         cur.execute("INSERT INTO Compra (id_tienda, id_proveedor, id_usuario, Fecha, Fecha_entrega_estimada, Total, Estado) VALUES (%s, %s, %s, %s, %s, %s, 'En tránsito')", (id_tienda, prov_sel["id_proveedor"], id_usuario, fecha_reg, fecha_est, total_compra))
         id_comp = cur.lastrowid
+        id_prov_cd = obtener_id_proveedor_cd(cur) if es_cd_comprando else None
+
         for item in carrito:
             cur.execute("INSERT INTO Detalle_compra (id_compra, Cantidad, Precio_compra, Precio_venta_sugerido, Fecha_vencimiento) VALUES (%s, %s, %s, %s, %s)", (id_comp, item["cantidad"], item["precio_compra"], item["precio_venta"], item["fecha_venc"]))
             cur.execute("INSERT INTO ProductoxProveedor (id_producto, id_proveedor, Ultimo_precio, Fecha_ultima_compra) VALUES (%s, %s, %s, %s) ON DUPLICATE KEY UPDATE Ultimo_precio = VALUES(Ultimo_precio), Fecha_ultima_compra = VALUES(Fecha_ultima_compra)", (item["id_producto"], prov_sel["id_proveedor"], item["precio_compra"], fecha_reg.date()))
+            
+            if es_cd_comprando and id_prov_cd:
+                cur.execute("INSERT INTO ProductoxProveedor (id_producto, id_proveedor, Ultimo_precio, Fecha_ultima_compra) VALUES (%s, %s, %s, %s) ON DUPLICATE KEY UPDATE Ultimo_precio = VALUES(Ultimo_precio), Fecha_ultima_compra = VALUES(Fecha_ultima_compra)", (item["id_producto"], id_prov_cd, item["precio_venta"], fecha_reg.date()))
+
             cur.execute("SELECT id_inventario FROM Inventario WHERE id_tienda = %s AND id_producto = %s LIMIT 1", (id_tienda, item["id_producto"]))
             inv = cur.fetchone()
             if inv:
                 cur.execute("UPDATE Inventario SET Stock_minimo = %s WHERE id_inventario = %s", (item["stock_minimo"], inv["id_inventario"]))
+
         cx.commit()
         return True, f"🚚 Orden #{id_comp} registrada **En tránsito** por **${total_compra:.2f}**. Ingresará el **{fecha_est.strftime('%d/%m/%Y %H:%M')}**."
     except Exception as e:
@@ -240,61 +244,89 @@ def mostrar_compras():
             if k not in st.session_state: st.session_state[k] = v
         if st.session_state.get("msg_exito_compra"): st.success(st.session_state.pop("msg_exito_compra"))
 
+        productos_cat = obtener_productos_catalogo()
         proveedores = obtener_proveedores(es_cd)
-        if not proveedores:
-            st.warning("⚠️ No hay proveedores registrados en el catálogo.")
+        if not proveedores or not productos_cat:
+            st.warning("⚠️ Verifica que tengas proveedores y productos registrados en el catálogo.")
             return
 
-        prov_sel = st.selectbox("Proveedor", [None] + proveedores, index=0, format_func=lambda x: "-- Selecciona un proveedor --" if x is None else f"{x['Nombre']} ({x['Tipo']})", key=f"sel_prov_comp_{st.session_state['reset_prov_comp']}", disabled=(len(st.session_state["carrito_compras"]) > 0))
-        es_compra_cd = prov_sel is not None and ("distribuci" in (prov_sel["Nombre"] or "").lower())
+        prod_sel = st.selectbox(
+            "Producto del Catálogo",
+            [None] + productos_cat,
+            index=0,
+            format_func=lambda x: "-- Selecciona un producto --" if x is None else f"{x['Nombre']} ({x['Unidad_medida']}) - {x['Codigo_barras']}",
+            key=f"sel_prod_comp_{st.session_state['reset_prod_comp']}"
+        )
+
+        comparativa = obtener_comparativa_producto(prod_sel["id_producto"]) if prod_sel else []
+        stock_cd, precio_cd_inv = obtener_stock_cd_producto(prod_sel["id_producto"]) if prod_sel else (0, 0.0)
+
+        if prod_sel and comparativa:
+            st.subheader("📊 Comparativa de Costos por Proveedor")
+            tabla_comp = [
+                {
+                    "Proveedor": c["Proveedor"],
+                    "Tipo": c["Tipo"],
+                    "Precio Unitario": f"${float(c['Ultimo_precio']):.2f}",
+                    "Última Compra": c["Fecha_ultima_compra"]
+                }
+                for c in comparativa
+            ]
+            st.dataframe(tabla_comp, use_container_width=True, hide_index=True)
+
+            if not es_cd:
+                cd_rows = [c for c in comparativa if "distribuci" in c["Proveedor"].lower()]
+                ext_rows = [c for c in comparativa if "distribuci" not in c["Proveedor"].lower()]
+                if cd_rows and ext_rows:
+                    p_cd = float(cd_rows[0]["Ultimo_precio"])
+                    mejor_ext = min(ext_rows, key=lambda x: float(x["Ultimo_precio"]))
+                    p_ext = float(mejor_ext["Ultimo_precio"])
+                    if p_cd < p_ext and stock_cd > 0:
+                        st.success(f"✅ **Conviene comprar al Centro de Distribución (${p_cd:.2f})** — Es más barato que **{mejor_ext['Proveedor']} (${p_ext:.2f})**. Stock disponible en CD: **{stock_cd}**.")
+                    elif p_cd < p_ext and stock_cd == 0:
+                        st.warning(f"⚠️ El Centro de Distribución tiene mejor precio (${p_cd:.2f}), pero actualmente no tiene existencias en bodega. Puedes comprar a **{mejor_ext['Proveedor']} (${p_ext:.2f})**.")
+                    else:
+                        st.info(f"💡 **Conviene comprar al proveedor externo ({mejor_ext['Proveedor']} a ${p_ext:.2f})** — Su costo es menor que el del Centro de Distribución (${p_cd:.2f}).")
 
         st.divider()
-        st.subheader("Detalle de Productos Solicitados")
 
-        if es_compra_cd:
-            productos_cd = obtener_productos_disponibles_cd()
-            if not productos_cd:
-                st.warning("📦 El Centro de Distribución no tiene existencias disponibles en este momento.")
-                return
-            c1, c2 = st.columns(2)
-            with c1:
-                prod_sel = st.selectbox(
-                    "Producto disponible en Centro de Distribución",
-                    [None] + productos_cd,
-                    index=0,
-                    format_func=lambda x: "-- Selecciona un producto --" if x is None else f"{x['Nombre']} ({x['Unidad_medida']}) - Disp: {x['Existencia']} | ${float(x['Precio_venta']):.2f}",
-                    key=f"sel_prod_comp_{st.session_state['reset_prod_comp']}"
-                )
-                max_disp_cd = int(prod_sel["Existencia"]) if prod_sel else 0
-                cantidad = st.number_input("Cantidad solicitada", min_value=0, max_value=max(0, max_disp_cd), step=1, key="comp_cant_0")
-                lead_time = st.number_input("Lead Time de traslado (días)", min_value=1, max_value=30, step=1, key="comp_lead_0")
-            with c2:
-                precio_compra = float(prod_sel["Precio_venta"]) if prod_sel else 0.00
-                st.number_input("Precio de Compra Unitario ($ - Fijo CD)", value=precio_compra, format="%.2f", disabled=True)
-                precio_sugerido = round(precio_compra * 1.20, 2)
-                st.number_input("Precio de Venta Sugerido en Tienda (+20%)", value=precio_sugerido, format="%.2f", disabled=True)
-                demanda_mensual = st.number_input("Demanda Estimada Mensual (unidades/mes)", min_value=1, step=1, key="comp_dem_0")
-        else:
-            productos_cat = obtener_productos_catalogo()
-            if not productos_cat:
-                st.warning("⚠️ Primero debes registrar productos en el catálogo.")
-                return
-            c1, c2 = st.columns(2)
-            with c1:
-                prod_sel = st.selectbox(
-                    "Producto del Catálogo",
-                    [None] + productos_cat,
-                    index=0,
-                    format_func=lambda x: "-- Selecciona un producto --" if x is None else f"{x['Nombre']} ({x['Unidad_medida']}) - {x['Codigo_barras']}",
-                    key=f"sel_prod_comp_{st.session_state['reset_prod_comp']}"
-                )
-                cantidad = st.number_input("Cantidad solicitada", min_value=0, step=1, key="comp_cant_0")
-                lead_time = st.number_input("Lead Time del Proveedor (días de entrega)", min_value=1, max_value=90, step=1, key="comp_lead_0")
-            with c2:
+        prov_sel = st.selectbox(
+            "Proveedor seleccionado para la orden",
+            [None] + proveedores,
+            index=0,
+            format_func=lambda x: "-- Selecciona un proveedor --" if x is None else f"{x['Nombre']} ({x['Tipo']})",
+            key=f"sel_prov_comp_{st.session_state['reset_prov_comp']}",
+            disabled=(len(st.session_state["carrito_compras"]) > 0)
+        )
+        es_compra_cd = prov_sel is not None and ("distribuci" in (prov_sel["Nombre"] or "").lower())
+
+        clave_par = f"{prod_sel['id_producto'] if prod_sel else 0}_{prov_sel['id_proveedor'] if prov_sel else 0}"
+        if st.session_state.get("ultimo_par_pxp") != clave_par:
+            st.session_state["ultimo_par_pxp"] = clave_par
+            precio_encontrado = 0.00
+            if prod_sel and prov_sel:
+                if es_compra_cd and precio_cd_inv > 0:
+                    precio_encontrado = precio_cd_inv
+                else:
+                    match = [c for c in comparativa if c["id_proveedor"] == prov_sel["id_proveedor"]]
+                    if match:
+                        precio_encontrado = float(match[0]["Ultimo_precio"])
+            st.session_state["comp_costo_0"] = precio_encontrado
+
+        c1, c2 = st.columns(2)
+        with c1:
+            max_cant = stock_cd if (es_compra_cd and prod_sel) else None
+            cantidad = st.number_input("Cantidad solicitada", min_value=0, max_value=max_cant, step=1, key="comp_cant_0")
+            lead_time = st.number_input("Lead Time (días de entrega)", min_value=1, max_value=90, step=1, key="comp_lead_0")
+        with c2:
+            if es_compra_cd:
+                precio_compra = st.session_state["comp_costo_0"]
+                st.number_input("Precio de Compra Unitario ($ - Tarifa fija CD)", value=precio_compra, format="%.2f", disabled=True)
+            else:
                 precio_compra = st.number_input("Precio de Compra Unitario ($)", min_value=0.00, step=0.05, format="%.2f", key="comp_costo_0")
-                precio_sugerido = round(precio_compra * 1.20, 2)
-                st.number_input("Precio de Venta Sugerido (+20%)", value=precio_sugerido, format="%.2f", disabled=True)
-                demanda_mensual = st.number_input("Demanda Estimada Mensual (unidades/mes)", min_value=1, step=1, key="comp_dem_0")
+            precio_sugerido = round(precio_compra * 1.20, 2)
+            st.number_input("Precio de Venta Sugerido (+20%)", value=precio_sugerido, format="%.2f", disabled=True)
+            demanda_mensual = st.number_input("Demanda Estimada Mensual (unidades/mes)", min_value=1, step=1, key="comp_dem_0")
 
         demanda_diaria = demanda_mensual / 30.0
         stock_min_calc = max(1, math.ceil(demanda_diaria * lead_time))
@@ -304,8 +336,9 @@ def mostrar_compras():
         fecha_venc = st.date_input("Fecha de Vencimiento", min_value=date.today()) if tiene_venc else None
 
         if st.button("➕ Agregar Producto a la Orden"):
-            if prov_sel is None: st.warning("⚠️ Primero debes seleccionar un proveedor.")
-            elif prod_sel is None: st.warning("⚠️ Por favor, selecciona un producto.")
+            if prod_sel is None: st.warning("⚠️ Selecciona primero un producto.")
+            elif prov_sel is None: st.warning("⚠️ Selecciona un proveedor.")
+            elif es_compra_cd and stock_cd == 0: st.error("❌ El Centro de Distribución no tiene existencias de este producto.")
             elif cantidad <= 0: st.warning("⚠️ La cantidad solicitada debe ser mayor a 0.")
             elif precio_compra <= 0: st.warning("⚠️ El precio de compra unitario debe ser mayor a $0.00.")
             else:
@@ -339,7 +372,7 @@ def mostrar_compras():
                 if st.button("🚚 Confirmar Orden de Compra"):
                     if prov_sel is None: st.error("❌ Debes seleccionar un proveedor.")
                     else:
-                        exito, msg = registrar_orden_compra(id_tienda, nombre_tienda, id_usuario, prov_sel, st.session_state["carrito_compras"], total_compra)
+                        exito, msg = registrar_orden_compra(id_tienda, nombre_tienda, id_usuario, prov_sel, st.session_state["carrito_compras"], total_compra, es_cd)
                         if exito:
                             st.session_state["carrito_compras"] = []
                             st.session_state["msg_exito_compra"] = msg
@@ -357,13 +390,7 @@ def mostrar_compras():
             if cx:
                 try:
                     cur = cx.cursor(dictionary=True)
-                    cur.execute("""
-                        SELECT v.id_venta, v.Fecha, v.Total, v.Estado
-                        FROM Venta v
-                        INNER JOIN Cliente c ON v.id_cliente = c.id_cliente
-                        WHERE v.Estado = 'En tránsito' AND TRIM(LOWER(c.Nombre)) = TRIM(LOWER(%s))
-                        ORDER BY v.Fecha ASC
-                    """, (nombre_tienda,))
+                    cur.execute("SELECT v.id_venta, v.Fecha, v.Total, v.Estado FROM Venta v INNER JOIN Cliente c ON v.id_cliente = c.id_cliente WHERE v.Estado = 'En tránsito' AND TRIM(LOWER(c.Nombre)) = TRIM(LOWER(%s)) ORDER BY v.Fecha ASC", (nombre_tienda,))
                     envios_cd = cur.fetchall()
                 finally:
                     cur.close(); cx.close()
