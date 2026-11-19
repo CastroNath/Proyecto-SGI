@@ -5,6 +5,7 @@ import streamlit as st
 
 from config.conexion import consultar, obtener_conexion
 from modulos.negocio import ReglaNegocioError, baja_manual, dar_baja_vencidos
+from modulos.formato import tabla
 
 
 DIAS_DEMANDA = 30
@@ -71,7 +72,7 @@ def mostrar_inventario():
             solo = st.toggle("Mostrar solo productos a reponer")
             if solo:
                 df = df[df["Estado_stock"] != "OK"]
-            st.dataframe(df, width="stretch", hide_index=True,
+            tabla(df, width="stretch", hide_index=True,
                          column_config={"Precio_venta": st.column_config.NumberColumn("Precio Venta ($)", format="$%.2f")})
 
     with t_venc:
@@ -88,7 +89,7 @@ def mostrar_inventario():
             vencidos = sum(1 for l in lotes if l["Estado_lote"] == "Vencido")
             if vencidos:
                 st.error(f"⛔ {vencidos} lote(s) vencido(s): no se pueden vender y deben darse de baja.")
-            st.dataframe(lotes, width="stretch", hide_index=True)
+            tabla(lotes, width="stretch", hide_index=True)
 
     with t_ajuste:
         if not puede_editar:
@@ -111,7 +112,7 @@ def mostrar_inventario():
                 cambios = [i for i in inv if i["Sugerido"] is not None and i["Sugerido"] != int(i["Stock_minimo"])]
                 with st.expander(f"🔄 Recalcular todos los productos ({len(cambios)} con un valor distinto al actual)"):
                     if cambios:
-                        st.dataframe([{"Producto": i["Nombre"], "Vendido 30 días": int(i["Vendido"]),
+                        tabla([{"Producto": i["Nombre"], "Vendido 30 días": int(i["Vendido"]),
                                        "Demanda diaria": round(i["Demanda"], 2), "Lead time (días)": i["Lead_time"],
                                        "Actual": int(i["Stock_minimo"]), "Sugerido": i["Sugerido"]} for i in cambios],
                                      width="stretch", hide_index=True)
