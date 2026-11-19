@@ -15,10 +15,40 @@ def obtener_proveedores(es_cd):
                      "ORDER BY id_tienda_cd IS NULL, Nombre")
 
 
-def obtener_comparativa_producto(id_producto):
-    return consultar("""SELECT p.Nombre AS Proveedor, p.Tipo, pxp.Ultimo_precio AS Precio, pxp.Fecha_ultima_compra
-                        FROM ProductoxProveedor pxp JOIN Proveedor p ON p.id_proveedor = pxp.id_proveedor
-                        WHERE pxp.id_producto = %s ORDER BY pxp.Ultimo_precio""", (id_producto,))
+def obtener_comparativa_producto(id_producto, es_cd):
+    """CD / Administrador: último precio de cada proveedor (ProductoxProveedor).
+    Tiendas: solo precios que pagaron las TIENDAS a proveedores externos, más el precio de venta del CD.
+    Así la tienda compara lo que realmente puede pagar sin conocer el costo del CD."""
+    if es_cd:
+        return consultar("""SELECT p.Nombre AS Proveedor, p.Tipo, pxp.Ultimo_precio AS Precio,
+                                   pxp.Fecha_ultima_compra
+                            FROM ProductoxProveedor pxp JOIN Proveedor p ON p.id_proveedor = pxp.id_proveedor
+                            WHERE pxp.id_producto = %s ORDER BY pxp.Ultimo_precio""", (id_producto,))
+    filas = consultar("""
+        SELECT pr.Nombre AS Proveedor, pr.Tipo, dc.Precio_compra AS Precio,
+               DATE(c.Fecha_recepcion) AS Fecha_ultima_compra
+        FROM Compra c
+        JOIN Detalle_compra dc ON dc.id_compra = c.id_compra
+        JOIN Proveedor pr      ON pr.id_proveedor = c.id_proveedor
+        JOIN Tienda t          ON t.id_tienda = c.id_tienda
+        WHERE dc.id_producto = %s AND c.Estado = 'Recibida' AND t.Tipo <> 'CD' AND pr.id_tienda_cd IS NULL
+          AND dc.id_detalle_compra = (
+              SELECT d2.id_detalle_compra FROM Compra c2
+              JOIN Detalle_compra d2 ON d2.id_compra = c2.id_compra
+              JOIN Tienda t2 ON t2.id_tienda = c2.id_tienda
+              WHERE d2.id_producto = dc.id_producto AND c2.id_proveedor = c.id_proveedor
+                AND c2.Estado = 'Recibida' AND t2.Tipo <> 'CD'
+              ORDER BY c2.Fecha_recepcion DESC, d2.id_detalle_compra DESC LIMIT 1)
+        ORDER BY dc.Precio_compra""", (id_producto,))
+    cd = consultar_uno("""SELECT pr.Nombre AS Proveedor, pr.Tipo, i.Precio_venta AS Precio, e.CD_autorizado, i.Existencia
+                          FROM Proveedor pr JOIN Tienda t ON t.id_tienda = pr.id_tienda_cd
+                          JOIN Inventario i ON i.id_tienda = t.id_tienda AND i.id_producto = %s
+                          JOIN v_evaluacion_cd e ON e.id_producto = i.id_producto""", (id_producto,))
+    if cd and cd["CD_autorizado"] and cd["Existencia"] > 0:
+        filas.append({"Proveedor": f"🏢 {cd['Proveedor']}", "Tipo": cd["Tipo"], "Precio": cd["Precio"],
+                      "Fecha_ultima_compra": None})
+        filas.sort(key=lambda f: float(f["Precio"]))
+    return filas
 
 
 def datos_cd_producto(id_producto):
@@ -75,11 +105,12 @@ def mostrar_compras():
 
         info_cd = datos_cd_producto(prod_sel["id_producto"]) if prod_sel else None
         if prod_sel:
-            comp = obtener_comparativa_producto(prod_sel["id_producto"])
+            comp = obtener_comparativa_producto(prod_sel["id_producto"], es_cd)
             if comp:
                 with st.expander("📊 Comparativa de precios por proveedor", expanded=True):
                     st.dataframe(comp, width="stretch", hide_index=True,
-                                 column_config={"Precio": st.column_config.NumberColumn(format="$%.2f")})
+                                 column_config={"Precio": st.column_config.NumberColumn(format="$%.2f"),
+                                                "Fecha_ultima_compra": st.column_config.DateColumn("Última compra")})
             if not es_cd and info_cd:
                 # La tienda solo ve el precio al que le vende el CD, nunca su costo
                 precio_cd = float(info_cd["Precio_venta"] or 0)
