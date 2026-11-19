@@ -1,5 +1,6 @@
 import streamlit as st
 from config.conexion import obtener_conexion
+from modulos.compras import sincronizar_compras_en_transito
 
 def obtener_tiendas():
     conexion = obtener_conexion()
@@ -52,6 +53,7 @@ def consultar_inventario(id_tienda_filtro=None):
         conexion.close()
 
 def mostrar_inventario():
+    sincronizar_compras_en_transito()
     st.header("📦 Gestión de Inventarios")
     
     es_admin = (st.session_state.get("id_rol") == 1)
@@ -67,12 +69,18 @@ def mostrar_inventario():
         datos = consultar_inventario(id_tienda_usuario)
 
     if not datos:
-        st.info("📭 Aún no hay productos registrados en el inventario de esta selección. Registra una compra para alimentar existencias.")
+        st.info("📭 Aún no hay productos recibidos en el inventario de esta selección.")
         return
 
-    # Alertas rápidas de stock bajo
     bajos = [d for d in datos if d["Existencia"] <= d["Stock_minimo"]]
     if bajos:
-        st.warning(f"⚠️ Atención: Hay **{len(bajos)}** producto(s) en nivel crítico o agotado.")
+        st.warning(f"⚠️ Alerta de Punto de Reorden (ROP): Hay **{len(bajos)}** producto(s) con existencias iguales o menores a su stock mínimo calculado.")
 
-    st.dataframe(datos, use_container_width=True, hide_index=True)
+    st.dataframe(
+        datos,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "Precio_venta": st.column_config.NumberColumn("Precio Venta ($)", format="$%.2f")
+        }
+    )
