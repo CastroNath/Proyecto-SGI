@@ -125,6 +125,12 @@ def mostrar_compras():
                             "Cómpralo a un proveedor externo.")
 
         st.divider()
+        # Fuera del formulario: así la fecha aparece en cuanto se marca la casilla
+        if al_cd:
+            tiene_venc = False
+            st.caption("📅 El vencimiento se hereda automáticamente de los lotes que despacha el CD.")
+        else:
+            tiene_venc = st.checkbox("📅 Este lote tiene fecha de vencimiento", key=f"venc_{r}_{len(carrito)}")
         with st.form(f"item_compra_{r}_{len(carrito)}"):
             c1, c2 = st.columns(2)
             with c1:
@@ -143,9 +149,8 @@ def mostrar_compras():
                                                     format="%.2f")
                 margen = st.number_input("Margen sobre costo (%)", min_value=0, max_value=200,
                                          value=int((MARGEN_VENTA - 1) * 100))
-                tiene_venc = st.checkbox("📅 Este lote tiene fecha de vencimiento", disabled=al_cd)
-                fecha_venc = st.date_input("Fecha de vencimiento", min_value=date.today() + timedelta(days=1),
-                                           disabled=al_cd)
+                fecha_venc = (st.date_input("Fecha de vencimiento", min_value=date.today() + timedelta(days=1))
+                              if tiene_venc else None)
             agregar = st.form_submit_button("➕ Agregar producto a la orden")
 
         demanda_diaria = demanda_mensual / 30.0
