@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 from modulos.login import login
 from modulos.categorias import mostrar_categorias
 from modulos.productos import mostrar_productos
@@ -88,6 +89,33 @@ st.markdown("""
     }
     </style>
 """, unsafe_allow_html=True)
+
+# ---------------------------------------------------------------------------
+# Campos enteros: bloquear punto, coma, "e", signos y pegado de decimales.
+# Streamlit dibuja los number_input enteros con max="9007199254740991";
+# los de dinero (decimales) no se tocan.
+# ---------------------------------------------------------------------------
+components.html("""
+<script>
+(function () {
+  const doc = window.parent.document;
+  if (doc.__soloEnteros) return;          // instalar una sola vez
+  doc.__soloEnteros = true;
+  const esEntero = el => el && el.matches &&
+      el.matches('input[data-testid="stNumberInputField"][max="9007199254740991"]');
+  doc.addEventListener("keydown", e => {
+    if (esEntero(e.target) && [".", ",", "e", "E", "+", "-"].includes(e.key)) e.preventDefault();
+  }, true);
+  doc.addEventListener("beforeinput", e => {
+    if (esEntero(e.target) && e.data && /[^0-9]/.test(e.data)) e.preventDefault();
+  }, true);
+  doc.addEventListener("paste", e => {
+    const t = (e.clipboardData || window.clipboardData).getData("text");
+    if (esEntero(e.target) && /[^0-9]/.test(t)) e.preventDefault();
+  }, true);
+})();
+</script>
+""", height=0)
 
 if "sesion_iniciada" not in st.session_state:
     st.session_state["sesion_iniciada"] = False
