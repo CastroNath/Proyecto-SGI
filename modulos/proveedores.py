@@ -1,9 +1,4 @@
-"""Reglas de negocio del sistema.
 
-Toda operación que mueve inventario pasa por aquí y se ejecuta en UNA transacción:
-si cualquier validación falla, se revierte todo (no quedan compras o ventas a medias).
-Los módulos de interfaz (compras.py, ventas.py, inventario.py) solo llaman estas funciones.
-"""
 import hashlib
 import hmac
 import os
