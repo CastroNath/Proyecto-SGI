@@ -10,24 +10,16 @@ def ahora_sv():
     return datetime.now(ZONA_SV).replace(tzinfo=None)
 
 def sincronizar_compras_en_transito():
-    """Verifica órdenes 'En tránsito' cuyo Lead Time ya se cumplió y las ingresa al inventario."""
     cx = obtener_conexion()
     if not cx: return
     cur = None
     try:
         cur = cx.cursor(dictionary=True)
         fecha_actual = ahora_sv()
-        
-        cur.execute("""
-            SELECT id_compra, id_tienda 
-            FROM Compra 
-            WHERE Estado = 'En tránsito' AND Fecha_entrega_estimada <= %s
-        """, (fecha_actual,))
+        cur.execute("SELECT id_compra, id_tienda FROM Compra WHERE Estado = 'En tránsito' AND Fecha_entrega_estimada <= %s", (fecha_actual,))
         pendientes = cur.fetchall()
-        
         for comp in pendientes:
             procesar_ingreso_inventario(cur, comp["id_compra"], comp["id_tienda"])
-            
         if pendientes:
             cx.commit()
     except Exception:
@@ -37,21 +29,24 @@ def sincronizar_compras_en_transito():
         if cx: cx.close()
 
 def procesar_ingreso_inventario(cur, id_compra, id_tienda):
-    """Suma los detalles de una compra al inventario y la marca como Recibida."""
     cur.execute("""
-        SELECT dc.id_detalle_compra, dc.Cantidad, dc.Precio_venta_sugerido,
+        SELECT dc.id_detalle_compra, dc.Cantidad, dc.Precio_venta_sugerido, c.Fecha, c.Fecha_entrega_estimada,
                (SELECT pxp.id_producto FROM ProductoxProveedor pxp 
-                INNER JOIN Compra c ON c.id_proveedor = pxp.id_proveedor 
-                WHERE c.id_compra = dc.id_compra AND pxp.Ultimo_precio = dc.Precio_compra LIMIT 1) AS id_prod_rel
+                INNER JOIN Compra c2 ON c2.id_proveedor = pxp.id_proveedor 
+                WHERE c2.id_compra = dc.id_compra AND pxp.Ultimo_precio = dc.Precio_compra LIMIT 1) AS id_prod_rel
         FROM Detalle_compra dc
+        INNER JOIN Compra c ON dc.id_compra = c.id_compra
         WHERE dc.id_compra = %s
     """, (id_compra,))
     detalles = cur.fetchall()
 
     for d in detalles:
         id_prod = d["id_prod_rel"]
-        if not id_prod:
-            continue
+        if not id_prod: continue
+        
+        dias_lt = max(1, (d["Fecha_entrega_estimada"] - d["Fecha"]).days) if (d["Fecha_entrega_estimada"] and d["Fecha"]) else 1
+        rop_calculado = max(1, math.ceil(0.5 * dias_lt))
+        
         cur.execute("SELECT id_inventario FROM Inventario WHERE id_tienda = %s AND id_producto = %s LIMIT 1", (id_tienda, id_prod))
         inv = cur.fetchone()
         if inv:
@@ -63,8 +58,8 @@ def procesar_ingreso_inventario(cur, id_compra, id_tienda):
         else:
             cur.execute("""
                 INSERT INTO Inventario (id_tienda, id_producto, id_detalle_compra, Existencia, Stock_minimo, Precio_venta)
-                VALUES (%s, %s, %s, %s, 2, %s)
-            """, (id_tienda, id_prod, d["id_detalle_compra"], d["Cantidad"], d["Precio_venta_sugerido"]))
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, (id_tienda, id_prod, d["id_detalle_compra"], d["Cantidad"], rop_calculado, d["Precio_venta_sugerido"]))
 
     cur.execute("UPDATE Compra SET Estado = 'Recibida' WHERE id_compra = %s", (id_compra,))
 
@@ -115,7 +110,6 @@ def registrar_orden_compra(id_tienda, id_usuario, id_proveedor, carrito, total_c
                 INSERT INTO Detalle_compra (id_compra, Cantidad, Precio_compra, Precio_venta_sugerido, Fecha_vencimiento) 
                 VALUES (%s, %s, %s, %s, %s)
             """, (id_compra_gen, item["cantidad"], item["precio_compra"], item["precio_venta"], item["fecha_venc"]))
-            id_det_gen = cur.lastrowid
             
             cur.execute("""
                 INSERT INTO ProductoxProveedor (id_producto, id_proveedor, Ultimo_precio, Fecha_ultima_compra)
@@ -123,20 +117,15 @@ def registrar_orden_compra(id_tienda, id_usuario, id_proveedor, carrito, total_c
                 ON DUPLICATE KEY UPDATE Ultimo_precio = VALUES(Ultimo_precio), Fecha_ultima_compra = VALUES(Fecha_ultima_compra)
             """, (item["id_producto"], id_proveedor, item["precio_compra"], fecha_registro.date()))
             
-            # Pre-registrar o actualizar el Punto de Reorden (Stock_minimo) en Inventario sin sumar existencia aún
+            # Si el producto YA existe en Inventario de esa tienda, actualizamos su Punto de Reorden sin tocar existencias
             cur.execute("SELECT id_inventario FROM Inventario WHERE id_tienda = %s AND id_producto = %s LIMIT 1", (id_tienda, item["id_producto"]))
             inv = cur.fetchone()
             if inv:
                 cur.execute("UPDATE Inventario SET Stock_minimo = %s WHERE id_inventario = %s", (item["stock_minimo"], inv["id_inventario"]))
-            else:
-                cur.execute("""
-                    INSERT INTO Inventario (id_tienda, id_producto, id_detalle_compra, Existencia, Stock_minimo, Precio_venta) 
-                    VALUES (%s, %s, %s, 0, %s, %s)
-                """, (id_tienda, item["id_producto"], id_det_gen, item["stock_minimo"], item["precio_venta"]))
                 
         cx.commit()
         fecha_str = fecha_estimada.strftime("%d/%m/%Y %H:%M")
-        return True, f"🚚 Orden #{id_compra_gen} registrada **En tránsito**. Ingresará al inventario el **{fecha_str}** (Lead Time: {max_lead_time} día(s))."
+        return True, f"🚚 Orden #{id_compra_gen} registrada **En tránsito** por **${total_compra:.2f}**. Ingresará al inventario el **{fecha_str}**."
     except Exception as e:
         cx.rollback()
         return False, f"❌ Error al registrar la compra: {e}"
@@ -316,7 +305,14 @@ def mostrar_compras():
         if not ordenes:
             st.info("✅ No hay pedidos pendientes en tránsito. Todas las compras anteriores ya fueron recibidas en inventario.")
         else:
-            st.dataframe(ordenes, use_container_width=True, hide_index=True)
+            st.dataframe(
+                ordenes,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Total": st.column_config.NumberColumn("Total ($)", format="$%.2f")
+                }
+            )
             sel_recibir = st.selectbox("Confirmar recepción anticipada si el camión ya llegó:", ordenes, format_func=lambda x: f"Orden #{x['id_compra']} - {x['Proveedor']} (${float(x['Total']):.2f})")
             if st.button("✅ Marcar como Recibida e Ingresar al Stock"):
                 cx = obtener_conexion()
