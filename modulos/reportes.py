@@ -32,8 +32,11 @@ def mostrar_reportes():
     ft = "AND v.id_tienda = %s" if id_t else ""
     pt = (id_t,) if id_t else ()
 
-    t1, t2, t3, t4, t5 = st.tabs(["🛒 ¿Cuándo y cuánto comprar?", "💵 Ventas", "🔄 Movimientos",
-                                  "🏪 Comparativo por tienda", "🏢 Evaluación del CD"])
+    ve_costos_cd = st.session_state.get("id_rol") == 1 or st.session_state.get("es_cd")
+    nombres = ["🛒 ¿Cuándo y cuánto comprar?", "💵 Ventas", "🔄 Movimientos", "🏪 Comparativo por tienda"]
+    tabs = st.tabs(nombres + (["🏢 Evaluación del CD"] if ve_costos_cd else []))
+    t1, t2, t3, t4 = tabs[:4]
+    t5 = tabs[4] if ve_costos_cd else None
 
     # -----------------------------------------------------------------
     with t1:
@@ -152,6 +155,8 @@ def mostrar_reportes():
             st.bar_chart(comp.set_index("Tienda")[["Ventas", "Compras"]])
 
     # -----------------------------------------------------------------
+    if t5 is None:
+        return
     with t5:
         st.caption("Regla de negocio: el CD solo puede abastecer a una tienda si su costo global de adquisición "
                    "(promedio ponderado) es menor que lo que pagan las tiendas a proveedores externos.")
