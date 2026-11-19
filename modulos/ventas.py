@@ -114,7 +114,7 @@ def mostrar_ventas():
                     st.rerun()
             with b2:
                 texto = "🚚 Confirmar despacho (En tránsito)" if a_tienda else "💳 Confirmar y cobrar venta"
-                if st.button(texto, type="primary", key=f"conf_{clave}"):
+                if st.button(texto, key=f"conf_{clave}"):
                     if id_cliente is None:
                         st.error("❌ Selecciona el cliente o la tienda destino.")
                         return
