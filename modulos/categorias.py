@@ -1,6 +1,9 @@
 import mysql.connector
 import streamlit as st
+
 from config.conexion import consultar, obtener_conexion
+from modulos.formato import tabla
+
 
 def mostrar_categorias():
     st.header("📁 Gestión de Categorías")
@@ -36,4 +39,4 @@ def mostrar_categorias():
     datos = consultar("""SELECT c.id_categoria AS ID, c.Nombre AS Categoría, COUNT(p.id_producto) AS Productos
                          FROM Categoria c LEFT JOIN Producto p ON p.id_categoria = c.id_categoria
                          GROUP BY c.id_categoria, c.Nombre ORDER BY c.Nombre""")
-    st.dataframe(datos, width="stretch", hide_index=True)
+    tabla(datos, width="stretch", hide_index=True)
