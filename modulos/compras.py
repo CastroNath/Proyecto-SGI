@@ -7,6 +7,7 @@ from config.conexion import consultar, consultar_uno
 from modulos.inventario import DIAS_DEMANDA
 from modulos.negocio import (MARGEN_VENTA, ReglaNegocioError, ahora_sv, anular_compra, confirmar_despacho_cd,
                              recibir_compra, registrar_compra, solicitar_al_cd)
+from modulos.formato import tabla
 
 
 def obtener_proveedores(es_cd):
@@ -118,7 +119,7 @@ def mostrar_compras():
             comp = obtener_comparativa_producto(prod_sel["id_producto"], es_cd)
             if comp:
                 with st.expander("📊 Comparativa de precios por proveedor", expanded=True):
-                    st.dataframe(comp, width="stretch", hide_index=True,
+                    tabla(comp, width="stretch", hide_index=True,
                                  column_config={"Precio": st.column_config.NumberColumn(format="$%.2f"),
                                                 "Fecha_ultima_compra": st.column_config.DateColumn("Última compra")})
             if not es_cd and info_cd:
@@ -264,11 +265,11 @@ def mostrar_compras():
             if not despachos:
                 st.info("✅ No tienes despachos pendientes del Centro de Distribución.")
             else:
-                st.dataframe(despachos, width="stretch", hide_index=True,
+                tabla(despachos, width="stretch", hide_index=True,
                              column_config={"Total": st.column_config.NumberColumn(format="$%.2f")})
                 sel = st.selectbox("Despacho recibido", despachos,
                                    format_func=lambda x: f"Despacho CD #{x['id_venta']} - ${float(x['Total']):.2f}")
-                st.dataframe(consultar("""SELECT p.Nombre AS Producto, dv.Cantidad, dv.Precio_unitario,
+                tabla(consultar("""SELECT p.Nombre AS Producto, dv.Cantidad, dv.Precio_unitario,
                                                  dv.Fecha_vencimiento FROM Detalle_venta dv
                                           JOIN Producto p ON p.id_producto = dv.id_producto WHERE dv.id_venta=%s""",
                                        (sel["id_venta"],)), width="stretch", hide_index=True)
@@ -292,7 +293,7 @@ def mostrar_compras():
         if not ordenes:
             st.info("✅ No hay órdenes en tránsito de proveedores externos.")
         else:
-            st.dataframe(ordenes, width="stretch", hide_index=True,
+            tabla(ordenes, width="stretch", hide_index=True,
                          column_config={"Total": st.column_config.NumberColumn(format="$%.2f")})
             sel = st.selectbox("Orden", ordenes,
                                format_func=lambda x: f"Orden #{x['id_compra']} - {x['Proveedor']} (${float(x['Total']):.2f})")
@@ -322,11 +323,11 @@ def mostrar_compras():
                                    c.id_venta_origen AS Despacho_CD
                             FROM Compra c JOIN Proveedor p ON p.id_proveedor = c.id_proveedor
                             WHERE c.id_tienda = %s ORDER BY c.Fecha DESC LIMIT 200""", (id_tienda,))
-        st.dataframe(hist, width="stretch", hide_index=True,
+        tabla(hist, width="stretch", hide_index=True,
                      column_config={"Total": st.column_config.NumberColumn(format="$%.2f")})
         if hist:
             sel = st.selectbox("Ver detalle de la compra", hist, format_func=lambda x: f"Compra #{x['id_compra']}")
-            st.dataframe(consultar("""SELECT p.Nombre AS Producto, dc.Cantidad, dc.Precio_compra,
+            tabla(consultar("""SELECT p.Nombre AS Producto, dc.Cantidad, dc.Precio_compra,
                                              dc.Precio_venta_sugerido, dc.Fecha_vencimiento
                                       FROM Detalle_compra dc LEFT JOIN Producto p ON p.id_producto = dc.id_producto
                                       WHERE dc.id_compra = %s""", (sel["id_compra"],)),
