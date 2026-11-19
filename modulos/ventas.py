@@ -73,15 +73,21 @@ def mostrar_ventas():
 
         with st.form(f"form_{clave}_{r}_{len(carrito)}"):
             c1, c2, c3 = st.columns([3, 1.2, 1.2])
-            prod = c1.selectbox("Producto disponible", productos,
-                                format_func=lambda x: f"{x['Nombre']} ({x['Unidad_medida']}) - Stock: {x['Existencia']}"
-                                                      f" | ${float(x['Precio_venta']):.2f}")
+            # Empieza vacío y no repite lo que ya está en el carrito, para no confundir el producto elegido
+            en_carrito = {i["id_producto"] for i in carrito}
+            prod = c1.selectbox("Producto disponible",
+                                [None] + [p for p in productos if p["id_producto"] not in en_carrito],
+                                format_func=lambda x: "-- Selecciona un producto --" if x is None else
+                                f"{x['Nombre']} ({x['Unidad_medida']}) · Stock: {x['Existencia']} · "
+                                f"Precio: ${float(x['Precio_venta']):.2f}")
             cantidad = c2.number_input("Cantidad", min_value=0, step=1)
             precio = c3.number_input("Precio unitario ($)", min_value=0.0, step=0.05, format="%.2f", value=None,
-                                     placeholder="de lista")
+                                     help="Déjalo vacío para usar el precio de venta del producto.")
             agregar = st.form_submit_button("➕ Agregar")
         if agregar:
-            if cantidad <= 0:
+            if prod is None:
+                st.warning("⚠️ Selecciona un producto.")
+            elif cantidad <= 0:
                 st.warning("⚠️ La cantidad debe ser mayor a 0.")
             elif any(i["id_producto"] == prod["id_producto"] for i in carrito):
                 st.warning("⚠️ El producto ya está en el carrito; elimínalo para cambiar la cantidad.")
