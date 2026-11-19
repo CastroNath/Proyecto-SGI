@@ -206,7 +206,7 @@ def mostrar_compras():
                     _limpiar_carrito()
                     st.rerun()
             with b2:
-                if st.button("🚚 Confirmar Orden de Compra", type="primary"):
+                if st.button("🚚 Confirmar Orden de Compra"):
                     try:
                         if al_cd:
                             idv = solicitar_al_cd(id_tienda, id_usuario,
