@@ -1,8 +1,36 @@
+import math
+
 import pandas as pd
 import streamlit as st
 
 from config.conexion import consultar, obtener_conexion
 from modulos.negocio import ReglaNegocioError, baja_manual, dar_baja_vencidos
+
+
+DIAS_DEMANDA = 30
+LEAD_TIME_DEFECTO = 3
+
+
+def sugerencias_stock_minimo(id_tienda):
+    """Stock mínimo sugerido por producto = demanda diaria × lead time.
+    Demanda diaria: unidades vendidas en la tienda en los últimos DIAS_DEMANDA días ÷ DIAS_DEMANDA.
+    Lead time: días promedio entre el pedido y la recepción de ese producto en la tienda."""
+    filas = consultar(f"""
+        SELECT i.id_inventario, p.Nombre, p.Unidad_medida, i.Existencia, i.Stock_minimo, i.Precio_venta,
+               COALESCE((SELECT SUM(dv.Cantidad) FROM Venta v JOIN Detalle_venta dv ON dv.id_venta = v.id_venta
+                         WHERE v.id_tienda = i.id_tienda AND dv.id_producto = i.id_producto
+                           AND v.Fecha >= NOW() - INTERVAL {DIAS_DEMANDA} DAY), 0) AS Vendido,
+               (SELECT AVG(GREATEST(DATEDIFF(c.Fecha_recepcion, c.Fecha), 1))
+                FROM Compra c JOIN Detalle_compra dc ON dc.id_compra = c.id_compra
+                WHERE c.id_tienda = i.id_tienda AND dc.id_producto = i.id_producto
+                  AND c.Estado = 'Recibida' AND c.Fecha_recepcion IS NOT NULL) AS Lead_time
+        FROM Inventario i JOIN Producto p ON p.id_producto = i.id_producto
+        WHERE i.id_tienda = %s ORDER BY p.Nombre""", (id_tienda,))
+    for f in filas:
+        f["Lead_time"] = round(float(f["Lead_time"])) if f["Lead_time"] is not None else LEAD_TIME_DEFECTO
+        f["Demanda"] = float(f["Vendido"]) / DIAS_DEMANDA
+        f["Sugerido"] = max(1, math.ceil(f["Demanda"] * f["Lead_time"])) if f["Vendido"] else None
+    return filas
 
 
 def selector_tienda(clave, permitir_todas=True):
@@ -72,21 +100,63 @@ def mostrar_inventario():
                 st.success(st.session_state.pop("ok_ajuste"))
 
             st.subheader("Stock mínimo y precio de venta")
-            inv = consultar("""SELECT i.id_inventario, p.Nombre, i.Stock_minimo, i.Precio_venta
-                               FROM Inventario i JOIN Producto p ON p.id_producto = i.id_producto
-                               WHERE i.id_tienda = %s ORDER BY p.Nombre""", (id_t,))
-            if inv:
-                with st.form("form_parametros"):
-                    sel = st.selectbox("Producto", inv, format_func=lambda x: x["Nombre"])
+            st.caption("El stock mínimo es el punto de reorden: al llegar a ese número el producto se marca "
+                       "«Reponer». Se calcula solo con lo que sale del inventario: **demanda diaria** (unidades "
+                       f"vendidas en los últimos {DIAS_DEMANDA} días ÷ {DIAS_DEMANDA}) **× lead time** (días promedio "
+                       f"entre pedir y recibir el producto; {LEAD_TIME_DEFECTO} si aún no hay compras recibidas).")
+            inv = sugerencias_stock_minimo(id_t)
+            if not inv:
+                st.info("Tu tienda aún no tiene productos en inventario.")
+            else:
+                cambios = [i for i in inv if i["Sugerido"] is not None and i["Sugerido"] != int(i["Stock_minimo"])]
+                with st.expander(f"🔄 Recalcular todos los productos ({len(cambios)} con un valor distinto al actual)"):
+                    if cambios:
+                        st.dataframe([{"Producto": i["Nombre"], "Vendido 30 días": int(i["Vendido"]),
+                                       "Demanda diaria": round(i["Demanda"], 2), "Lead time (días)": i["Lead_time"],
+                                       "Actual": int(i["Stock_minimo"]), "Sugerido": i["Sugerido"]} for i in cambios],
+                                     width="stretch", hide_index=True)
+                        if st.button("Aplicar el stock mínimo sugerido a todos", type="primary"):
+                            cx = obtener_conexion(); cur = cx.cursor()
+                            cur.executemany("UPDATE Inventario SET Stock_minimo=%s WHERE id_inventario=%s",
+                                            [(i["Sugerido"], i["id_inventario"]) for i in cambios])
+                            cx.commit(); cur.close(); cx.close()
+                            st.session_state["ok_ajuste"] = f"✅ Stock mínimo recalculado en {len(cambios)} productos."
+                            st.rerun()
+                    else:
+                        st.write("Todos los productos con ventas ya tienen su stock mínimo al día.")
+
+                # Fuera del formulario para que, al cambiar de producto, se carguen sus valores
+                sel = st.selectbox("Producto", inv, key="param_prod",
+                                   format_func=lambda x: f"{x['Nombre']} ({x['Unidad_medida']})")
+                actual_min, actual_precio = int(sel["Stock_minimo"]), float(sel["Precio_venta"])
+                st.caption(f"Actual: existencia **{sel['Existencia']}** · stock mínimo **{actual_min}** · "
+                           f"precio **${actual_precio:.2f}**")
+                if sel["Sugerido"] is None:
+                    st.caption(f"Sin ventas en los últimos {DIAS_DEMANDA} días: no hay datos para calcularlo; "
+                               "se mantiene el valor actual.")
+                    valor_min = actual_min
+                else:
+                    st.caption(f"Calculado: {int(sel['Vendido'])} unidades vendidas en {DIAS_DEMANDA} días → "
+                               f"{sel['Demanda']:.2f}/día × {sel['Lead_time']} días de lead time = "
+                               f"**{sel['Sugerido']}**")
+                    valor_min = sel["Sugerido"]
+                with st.form(f"form_parametros_{sel['id_inventario']}"):
                     c1, c2 = st.columns(2)
-                    minimo = c1.number_input("Nuevo stock mínimo", min_value=0, step=1)
-                    precio = c2.number_input("Nuevo precio de venta ($)", min_value=0.01, step=0.05, format="%.2f")
-                    if st.form_submit_button("💾 Guardar"):
+                    minimo = c1.number_input("Stock mínimo (calculado, puedes ajustarlo)", min_value=0, step=1,
+                                             value=valor_min)
+                    precio = c2.number_input("Precio de venta ($)", min_value=0.01, step=0.05, format="%.2f",
+                                             value=max(actual_precio, 0.01))
+                    guardar = st.form_submit_button("💾 Guardar")
+                if guardar:
+                    if int(minimo) == actual_min and round(precio, 2) == round(actual_precio, 2):
+                        st.info("No cambiaste ningún valor.")
+                    else:
                         cx = obtener_conexion(); cur = cx.cursor()
                         cur.execute("UPDATE Inventario SET Stock_minimo=%s, Precio_venta=%s WHERE id_inventario=%s",
-                                    (int(minimo), precio, sel["id_inventario"]))
+                                    (int(minimo), round(precio, 2), sel["id_inventario"]))
                         cx.commit(); cur.close(); cx.close()
-                        st.session_state["ok_ajuste"] = f"✅ {sel['Nombre']}: mínimo {minimo}, precio ${precio:.2f}."
+                        st.session_state["ok_ajuste"] = (f"✅ {sel['Nombre']}: stock mínimo {actual_min} → {int(minimo)}, "
+                                                         f"precio ${actual_precio:.2f} → ${precio:.2f}.")
                         st.rerun()
 
             st.subheader("Bajas de inventario")
