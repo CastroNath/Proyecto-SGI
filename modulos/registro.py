@@ -3,6 +3,7 @@ import streamlit as st
 
 from config.conexion import consultar, obtener_conexion
 from modulos.negocio import hash_password
+from modulos.formato import tabla
 
 
 def registrar_usuario(id_rol, id_tienda, nombre, usuario, contrasena):
@@ -70,7 +71,7 @@ def mostrar_registro():
                                        IF(u.Activo = 1, 'Activo', 'Inactivo') AS Estado
                                 FROM Usuario u JOIN Rol r ON r.id_rol = u.id_rol
                                 JOIN Tienda t ON t.id_tienda = u.id_tienda ORDER BY t.Nombre, u.Nombre""")
-        st.dataframe(usuarios, width="stretch", hide_index=True)
+        tabla(usuarios, width="stretch", hide_index=True)
         sel = st.selectbox("Usuario", usuarios, format_func=lambda x: f"{x['Usuario']} · {x['Nombre']} ({x['Estado']})")
         c1, c2 = st.columns(2)
         with c1:
