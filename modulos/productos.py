@@ -1,6 +1,7 @@
 import streamlit as st
 import mysql.connector
 from config.conexion import obtener_conexion
+from modulos.formato import tabla
 
 def es_centro_distribucion(id_tienda):
     cx = obtener_conexion()
@@ -65,7 +66,7 @@ def mostrar_productos():
         catalogo = obtener_catalogo_completo()
         if catalogo:
             st.subheader("Productos Disponibles en el Catálogo Global")
-            st.dataframe(catalogo, width="stretch", hide_index=True)
+            tabla(catalogo, width="stretch", hide_index=True)
         else:
             st.warning("📭 Aún no hay productos registrados en el catálogo.")
         return
@@ -128,6 +129,6 @@ def mostrar_productos():
         catalogo = obtener_catalogo_completo()
         if catalogo:
             st.subheader("Productos Registrados en la Red")
-            st.dataframe(catalogo, width="stretch", hide_index=True)
+            tabla(catalogo, width="stretch", hide_index=True)
         else:
             st.info("📭 No hay productos registrados aún.")
