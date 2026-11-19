@@ -15,13 +15,11 @@ def sincronizar_compras_en_transito():
     cur = None
     try:
         cur = cx.cursor(dictionary=True)
-        fecha_actual = ahora_sv()
-        cur.execute("SELECT id_compra, id_tienda FROM Compra WHERE Estado = 'En tránsito' AND Fecha_entrega_estimada <= %s", (fecha_actual,))
+        cur.execute("SELECT id_compra, id_tienda FROM Compra WHERE Estado = 'En tránsito' AND Fecha_entrega_estimada <= %s", (ahora_sv(),))
         pendientes = cur.fetchall()
         for comp in pendientes:
             procesar_ingreso_inventario(cur, comp["id_compra"], comp["id_tienda"])
-        if pendientes:
-            cx.commit()
+        if pendientes: cx.commit()
     except Exception:
         cx.rollback()
     finally:
@@ -38,29 +36,17 @@ def procesar_ingreso_inventario(cur, id_compra, id_tienda):
         INNER JOIN Compra c ON dc.id_compra = c.id_compra
         WHERE dc.id_compra = %s
     """, (id_compra,))
-    detalles = cur.fetchall()
-
-    for d in detalles:
+    for d in cur.fetchall():
         id_prod = d["id_prod_rel"]
         if not id_prod: continue
-        
         dias_lt = max(1, (d["Fecha_entrega_estimada"] - d["Fecha"]).days) if (d["Fecha_entrega_estimada"] and d["Fecha"]) else 1
-        rop_calculado = max(1, math.ceil(0.5 * dias_lt))
-        
+        rop_calc = max(1, math.ceil(0.5 * dias_lt))
         cur.execute("SELECT id_inventario FROM Inventario WHERE id_tienda = %s AND id_producto = %s LIMIT 1", (id_tienda, id_prod))
         inv = cur.fetchone()
         if inv:
-            cur.execute("""
-                UPDATE Inventario 
-                SET Existencia = Existencia + %s, Precio_venta = %s, id_detalle_compra = %s 
-                WHERE id_inventario = %s
-            """, (d["Cantidad"], d["Precio_venta_sugerido"], d["id_detalle_compra"], inv["id_inventario"]))
+            cur.execute("UPDATE Inventario SET Existencia = Existencia + %s, Precio_venta = %s, id_detalle_compra = %s WHERE id_inventario = %s", (d["Cantidad"], d["Precio_venta_sugerido"], d["id_detalle_compra"], inv["id_inventario"]))
         else:
-            cur.execute("""
-                INSERT INTO Inventario (id_tienda, id_producto, id_detalle_compra, Existencia, Stock_minimo, Precio_venta)
-                VALUES (%s, %s, %s, %s, %s, %s)
-            """, (id_tienda, id_prod, d["id_detalle_compra"], d["Cantidad"], rop_calculado, d["Precio_venta_sugerido"]))
-
+            cur.execute("INSERT INTO Inventario (id_tienda, id_producto, id_detalle_compra, Existencia, Stock_minimo, Precio_venta) VALUES (%s, %s, %s, %s, %s, %s)", (id_tienda, id_prod, d["id_detalle_compra"], d["Cantidad"], rop_calc, d["Precio_venta_sugerido"]))
     cur.execute("UPDATE Compra SET Estado = 'Recibida' WHERE id_compra = %s", (id_compra,))
 
 def obtener_proveedores(id_tienda_actual):
@@ -95,37 +81,20 @@ def registrar_orden_compra(id_tienda, id_usuario, id_proveedor, carrito, total_c
     cur = None
     try:
         cur = cx.cursor(dictionary=True)
-        fecha_registro = ahora_sv()
-        max_lead_time = max(item["lead_time"] for item in carrito)
-        fecha_estimada = fecha_registro + timedelta(days=max_lead_time)
-        
-        cur.execute("""
-            INSERT INTO Compra (id_tienda, id_proveedor, id_usuario, Fecha, Fecha_entrega_estimada, Total, Estado) 
-            VALUES (%s, %s, %s, %s, %s, %s, 'En tránsito')
-        """, (id_tienda, id_proveedor, id_usuario, fecha_registro, fecha_estimada, total_compra))
-        id_compra_gen = cur.lastrowid
-        
+        fecha_reg = ahora_sv()
+        max_lt = max(item["lead_time"] for item in carrito)
+        fecha_est = fecha_reg + timedelta(days=max_lt)
+        cur.execute("INSERT INTO Compra (id_tienda, id_proveedor, id_usuario, Fecha, Fecha_entrega_estimada, Total, Estado) VALUES (%s, %s, %s, %s, %s, %s, 'En tránsito')", (id_tienda, id_proveedor, id_usuario, fecha_reg, fecha_est, total_compra))
+        id_comp = cur.lastrowid
         for item in carrito:
-            cur.execute("""
-                INSERT INTO Detalle_compra (id_compra, Cantidad, Precio_compra, Precio_venta_sugerido, Fecha_vencimiento) 
-                VALUES (%s, %s, %s, %s, %s)
-            """, (id_compra_gen, item["cantidad"], item["precio_compra"], item["precio_venta"], item["fecha_venc"]))
-            
-            cur.execute("""
-                INSERT INTO ProductoxProveedor (id_producto, id_proveedor, Ultimo_precio, Fecha_ultima_compra)
-                VALUES (%s, %s, %s, %s)
-                ON DUPLICATE KEY UPDATE Ultimo_precio = VALUES(Ultimo_precio), Fecha_ultima_compra = VALUES(Fecha_ultima_compra)
-            """, (item["id_producto"], id_proveedor, item["precio_compra"], fecha_registro.date()))
-            
-            # Si el producto YA existe en Inventario de esa tienda, actualizamos su Punto de Reorden sin tocar existencias
+            cur.execute("INSERT INTO Detalle_compra (id_compra, Cantidad, Precio_compra, Precio_venta_sugerido, Fecha_vencimiento) VALUES (%s, %s, %s, %s, %s)", (id_comp, item["cantidad"], item["precio_compra"], item["precio_venta"], item["fecha_venc"]))
+            cur.execute("INSERT INTO ProductoxProveedor (id_producto, id_proveedor, Ultimo_precio, Fecha_ultima_compra) VALUES (%s, %s, %s, %s) ON DUPLICATE KEY UPDATE Ultimo_precio = VALUES(Ultimo_precio), Fecha_ultima_compra = VALUES(Fecha_ultima_compra)", (item["id_producto"], id_proveedor, item["precio_compra"], fecha_reg.date()))
             cur.execute("SELECT id_inventario FROM Inventario WHERE id_tienda = %s AND id_producto = %s LIMIT 1", (id_tienda, item["id_producto"]))
             inv = cur.fetchone()
             if inv:
                 cur.execute("UPDATE Inventario SET Stock_minimo = %s WHERE id_inventario = %s", (item["stock_minimo"], inv["id_inventario"]))
-                
         cx.commit()
-        fecha_str = fecha_estimada.strftime("%d/%m/%Y %H:%M")
-        return True, f"🚚 Orden #{id_compra_gen} registrada **En tránsito** por **${total_compra:.2f}**. Ingresará al inventario el **{fecha_str}**."
+        return True, f"🚚 Orden #{id_comp} registrada **En tránsito** por **${total_compra:.2f}**. Ingresará el **{fecha_est.strftime('%d/%m/%Y %H:%M')}**."
     except Exception as e:
         cx.rollback()
         return False, f"❌ Error al registrar la compra: {e}"
@@ -138,7 +107,6 @@ def mostrar_compras():
     st.header("📥 Gestión de Compras")
     id_tienda = st.session_state.get("id_tienda")
     id_usuario = st.session_state.get("id_usuario")
-    
     tab_nueva, tab_transito = st.tabs(["➕ Nueva Orden de Compra", "🚚 Pedidos en Tránsito"])
 
     with tab_nueva:
@@ -147,64 +115,35 @@ def mostrar_compras():
 
         if st.session_state.get("limpiar_item_compra", False):
             st.session_state["reset_prod_comp"] += 1
-            st.session_state["comp_cant_0"] = 0
-            st.session_state["comp_costo_0"] = 0.00
-            st.session_state["comp_lead_0"] = 1
-            st.session_state["comp_dem_0"] = 15
-            st.session_state["comp_venc_chk_0"] = False
+            for k, v in [("comp_cant_0", 0), ("comp_costo_0", 0.00), ("comp_lead_0", 1), ("comp_dem_0", 15), ("comp_venc_chk_0", False)]: st.session_state[k] = v
             st.session_state["limpiar_item_compra"] = False
 
         if st.session_state.get("limpiar_todo_compra", False):
             st.session_state["reset_prov_comp"] += 1
             st.session_state["reset_prod_comp"] += 1
-            st.session_state["comp_cant_0"] = 0
-            st.session_state["comp_costo_0"] = 0.00
-            st.session_state["comp_lead_0"] = 1
-            st.session_state["comp_dem_0"] = 15
-            st.session_state["comp_venc_chk_0"] = False
+            for k, v in [("comp_cant_0", 0), ("comp_costo_0", 0.00), ("comp_lead_0", 1), ("comp_dem_0", 15), ("comp_venc_chk_0", False)]: st.session_state[k] = v
             st.session_state["limpiar_todo_compra"] = False
 
         if "carrito_compras" not in st.session_state: st.session_state["carrito_compras"] = []
-        if "comp_cant_0" not in st.session_state: st.session_state["comp_cant_0"] = 0
-        if "comp_costo_0" not in st.session_state: st.session_state["comp_costo_0"] = 0.00
-        if "comp_lead_0" not in st.session_state: st.session_state["comp_lead_0"] = 1
-        if "comp_dem_0" not in st.session_state: st.session_state["comp_dem_0"] = 15
-        if "comp_venc_chk_0" not in st.session_state: st.session_state["comp_venc_chk_0"] = False
-            
-        if st.session_state.get("msg_exito_compra"):
-            st.success(st.session_state.pop("msg_exito_compra"))
+        for k, v in [("comp_cant_0", 0), ("comp_costo_0", 0.00), ("comp_lead_0", 1), ("comp_dem_0", 15), ("comp_venc_chk_0", False)]:
+            if k not in st.session_state: st.session_state[k] = v
+        if st.session_state.get("msg_exito_compra"): st.success(st.session_state.pop("msg_exito_compra"))
 
         proveedores = obtener_proveedores(id_tienda)
         productos = obtener_productos_catalogo()
-        
         if not proveedores or not productos:
             st.warning("⚠️ Verifica que tengas proveedores y productos registrados en el catálogo.")
             return
 
-        prov_sel = st.selectbox(
-            "Proveedor",
-            [None] + proveedores,
-            index=0,
-            format_func=lambda x: "-- Selecciona un proveedor --" if x is None else f"{x['Nombre']} ({x['Tipo']})",
-            key=f"sel_prov_comp_{st.session_state['reset_prov_comp']}",
-            disabled=(len(st.session_state["carrito_compras"]) > 0)
-        )
-
+        prov_sel = st.selectbox("Proveedor", [None] + proveedores, index=0, format_func=lambda x: "-- Selecciona un proveedor --" if x is None else f"{x['Nombre']} ({x['Tipo']})", key=f"sel_prov_comp_{st.session_state['reset_prov_comp']}", disabled=(len(st.session_state["carrito_compras"]) > 0))
         st.divider()
         st.subheader("Detalle de Productos Solicitados")
         
         c1, c2 = st.columns(2)
         with c1:
-            prod_sel = st.selectbox(
-                "Producto del Catálogo",
-                [None] + productos,
-                index=0,
-                format_func=lambda x: "-- Selecciona un producto --" if x is None else f"{x['Nombre']} ({x['Unidad_medida']}) - {x['Codigo_barras']}",
-                key=f"sel_prod_comp_{st.session_state['reset_prod_comp']}"
-            )
+            prod_sel = st.selectbox("Producto del Catálogo", [None] + productos, index=0, format_func=lambda x: "-- Selecciona un producto --" if x is None else f"{x['Nombre']} ({x['Unidad_medida']}) - {x['Codigo_barras']}", key=f"sel_prod_comp_{st.session_state['reset_prod_comp']}")
             cantidad = st.number_input("Cantidad solicitada", min_value=0, step=1, key="comp_cant_0")
             lead_time = st.number_input("Lead Time del Proveedor (días de entrega)", min_value=1, max_value=90, step=1, key="comp_lead_0")
-            
         with c2:
             precio_compra = st.number_input("Precio de Compra Unitario ($)", min_value=0.00, step=0.05, format="%.2f", key="comp_costo_0")
             precio_sugerido = round(precio_compra * 1.20, 2)
@@ -212,34 +151,19 @@ def mostrar_compras():
             demanda_mensual = st.number_input("Demanda Estimada Mensual (unidades/mes)", min_value=1, step=1, key="comp_dem_0")
 
         demanda_diaria = demanda_mensual / 30.0
-        stock_min_calculado = max(1, math.ceil(demanda_diaria * lead_time))
-        st.caption(f"📐 **Punto de Reorden calculado:** `{stock_min_calculado}` unidad(es) — *(Demanda diaria: {demanda_diaria:.2f} × Lead Time: {lead_time} días)*")
+        stock_min_calc = max(1, math.ceil(demanda_diaria * lead_time))
+        st.caption(f"📐 **Punto de Reorden calculado:** `{stock_min_calc}` unidad(es) — *(Demanda diaria: {demanda_diaria:.2f} × Lead Time: {lead_time} días)*")
 
-        tiene_vencimiento = st.checkbox("📅 Este lote tiene fecha de vencimiento", key="comp_venc_chk_0")
-        fecha_venc = st.date_input("Fecha de Vencimiento", min_value=date.today()) if tiene_vencimiento else None
+        tiene_venc = st.checkbox("📅 Este lote tiene fecha de vencimiento", key="comp_venc_chk_0")
+        fecha_venc = st.date_input("Fecha de Vencimiento", min_value=date.today()) if tiene_venc else None
 
         if st.button("➕ Agregar Producto a la Orden"):
-            if prov_sel is None:
-                st.warning("⚠️ Primero debes seleccionar un proveedor.")
-            elif prod_sel is None:
-                st.warning("⚠️ Por favor, selecciona un producto del catálogo.")
-            elif cantidad <= 0:
-                st.warning("⚠️ La cantidad solicitada debe ser mayor a 0.")
-            elif precio_compra <= 0:
-                st.warning("⚠️ El precio de compra unitario debe ser mayor a $0.00.")
+            if prov_sel is None: st.warning("⚠️ Primero debes seleccionar un proveedor.")
+            elif prod_sel is None: st.warning("⚠️ Por favor, selecciona un producto del catálogo.")
+            elif cantidad <= 0: st.warning("⚠️ La cantidad solicitada debe ser mayor a 0.")
+            elif precio_compra <= 0: st.warning("⚠️ El precio de compra unitario debe ser mayor a $0.00.")
             else:
-                st.session_state["carrito_compras"].append({
-                    "id_producto": prod_sel["id_producto"],
-                    "nombre": prod_sel["Nombre"],
-                    "unidad": prod_sel["Unidad_medida"],
-                    "cantidad": cantidad,
-                    "precio_compra": precio_compra,
-                    "precio_venta": precio_sugerido,
-                    "lead_time": lead_time,
-                    "stock_minimo": stock_min_calculado,
-                    "fecha_venc": fecha_venc,
-                    "subtotal": cantidad * precio_compra
-                })
+                st.session_state["carrito_compras"].append({"id_producto": prod_sel["id_producto"], "nombre": prod_sel["Nombre"], "unidad": prod_sel["Unidad_medida"], "cantidad": cantidad, "precio_compra": precio_compra, "precio_venta": precio_sugerido, "lead_time": lead_time, "stock_minimo": stock_min_calc, "fecha_venc": fecha_venc, "subtotal": cantidad * precio_compra})
                 st.session_state["limpiar_item_compra"] = True
                 st.rerun()
 
@@ -247,7 +171,6 @@ def mostrar_compras():
             st.divider()
             st.subheader("Resumen de la Orden de Compra")
             total_compra = 0.0
-            
             for idx, item in enumerate(st.session_state["carrito_compras"]):
                 col1, col2, col3, col4, col5 = st.columns([3, 1.2, 1.5, 1.5, 0.8])
                 col1.write(f"**{item['nombre']}** ({item['unidad']}) · *ROP: {item['stock_minimo']}*")
@@ -260,7 +183,6 @@ def mostrar_compras():
                 total_compra += item["subtotal"]
 
             st.markdown(f"### Total de Compra: `${total_compra:.2f}`")
-            
             b1, b2 = st.columns(2)
             with b1:
                 if st.button("🧹 Limpiar Orden"):
@@ -269,8 +191,7 @@ def mostrar_compras():
                     st.rerun()
             with b2:
                 if st.button("🚚 Confirmar Orden de Compra"):
-                    if prov_sel is None:
-                        st.error("❌ Debes seleccionar un proveedor.")
+                    if prov_sel is None: st.error("❌ Debes seleccionar un proveedor.")
                     else:
                         exito, msg = registrar_orden_compra(id_tienda, id_usuario, prov_sel["id_proveedor"], st.session_state["carrito_compras"], total_compra)
                         if exito:
@@ -278,26 +199,17 @@ def mostrar_compras():
                             st.session_state["msg_exito_compra"] = msg
                             st.session_state["limpiar_todo_compra"] = True
                             st.rerun()
-                        else:
-                            st.error(msg)
+                        else: st.error(msg)
 
     with tab_transito:
         st.subheader("🚚 Órdenes de Compra en Camino")
         st.caption(f"Hora actual del sistema (El Salvador): **{ahora_sv().strftime('%d/%m/%Y %H:%M')}**")
-        
         cx = obtener_conexion()
         ordenes = []
         if cx:
             try:
                 cur = cx.cursor(dictionary=True)
-                cur.execute("""
-                    SELECT c.id_compra, p.Nombre AS Proveedor, c.Fecha AS Fecha_Pedido, 
-                           c.Fecha_entrega_estimada AS Entrega_Estimada, c.Total, c.Estado
-                    FROM Compra c
-                    INNER JOIN Proveedor p ON c.id_proveedor = p.id_proveedor
-                    WHERE c.id_tienda = %s AND c.Estado = 'En tránsito'
-                    ORDER BY c.Fecha_entrega_estimada ASC
-                """, (id_tienda,))
+                cur.execute("SELECT c.id_compra, p.Nombre AS Proveedor, c.Fecha AS Fecha_Pedido, c.Fecha_entrega_estimada AS Entrega_Estimada, c.Total, c.Estado FROM Compra c INNER JOIN Proveedor p ON c.id_proveedor = p.id_proveedor WHERE c.id_tienda = %s AND c.Estado = 'En tránsito' ORDER BY c.Fecha_entrega_estimada ASC", (id_tienda,))
                 ordenes = cur.fetchall()
             finally:
                 cur.close(); cx.close()
@@ -305,14 +217,8 @@ def mostrar_compras():
         if not ordenes:
             st.info("✅ No hay pedidos pendientes en tránsito. Todas las compras anteriores ya fueron recibidas en inventario.")
         else:
-            st.dataframe(
-                ordenes,
-                use_container_width=True,
-                hide_index=True,
-                column_config={
-                    "Total": st.column_config.NumberColumn("Total ($)", format="$%.2f")
-                }
-            )
+            ordenes_tabla = [{"ID Compra": o["id_compra"], "Proveedor": o["Proveedor"], "Fecha Pedido": o["Fecha_Pedido"], "Entrega Estimada": o["Entrega_Estimada"], "Total": f"${float(o['Total']):.2f}", "Estado": o["Estado"]} for o in ordenes]
+            st.dataframe(ordenes_tabla, use_container_width=True, hide_index=True)
             sel_recibir = st.selectbox("Confirmar recepción anticipada si el camión ya llegó:", ordenes, format_func=lambda x: f"Orden #{x['id_compra']} - {x['Proveedor']} (${float(x['Total']):.2f})")
             if st.button("✅ Marcar como Recibida e Ingresar al Stock"):
                 cx = obtener_conexion()
