@@ -1,6 +1,7 @@
 import streamlit as st
 
 from config.conexion import consultar, obtener_conexion
+from modulos.formato import tabla
 
 
 def mostrar_clientes():
@@ -58,6 +59,6 @@ def mostrar_clientes():
                         cur.close(); cx.close()
 
     st.subheader("Clientes registrados")
-    st.dataframe(consultar("""SELECT c.id_cliente AS ID, c.Nombre, c.Tipo, t.Nombre AS Sucursal_enlazada
+    tabla(consultar("""SELECT c.id_cliente AS ID, c.Nombre, c.Tipo, t.Nombre AS Sucursal_enlazada
                               FROM Cliente c LEFT JOIN Tienda t ON t.id_tienda = c.id_tienda
                               ORDER BY c.Tipo, c.Nombre"""), width="stretch", hide_index=True)
