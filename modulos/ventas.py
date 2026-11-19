@@ -31,7 +31,8 @@ def mostrar_ventas():
     es_cd = st.session_state.get("es_cd", False)
     st.caption(f"🏪 Registrando en: **{st.session_state.get('nombre_tienda')}**")
 
-    tabs = st.tabs(["🛍️ Nueva Venta", "🚚 Despacho a Tienda", "📋 Historial"] if es_cd
+    # El CD solo vende a las tiendas (despachos); las tiendas venden al público
+    tabs = st.tabs(["🚚 Despacho a Tienda", "📋 Historial"] if es_cd
                    else ["🛍️ Nueva Venta", "📋 Historial"])
 
     def formulario(tab, a_tienda):
@@ -44,8 +45,7 @@ def mostrar_ventas():
             st.success(st.session_state.pop(f"ok_{clave}"))
 
         if a_tienda:
-            st.info("Solo se listan productos para los que el CD está **autorizado** (su costo global es menor que "
-                    "el de proveedores externos). La tienda registrará su compra al confirmar la recepción.")
+            st.caption("Solo aparecen los productos en los que el CD es más barato que los proveedores externos.")
             tiendas = obtener_clientes(solo_tiendas=True)
             sel = st.selectbox("Tienda destino", [None] + tiendas, key=f"cli_{clave}_{r}",
                                format_func=lambda x: "-- Selecciona una tienda --" if x is None else x["Nombre"],
@@ -137,10 +137,7 @@ def mostrar_ventas():
                         st.error(f"❌ {e}")
 
     with tabs[0]:
-        formulario(tabs[0], a_tienda=False)
-    if es_cd:
-        with tabs[1]:
-            formulario(tabs[1], a_tienda=True)
+        formulario(tabs[0], a_tienda=es_cd)
 
     with tabs[-1]:
         c1, c2 = st.columns(2)
