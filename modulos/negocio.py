@@ -118,13 +118,13 @@ def evaluacion_cd(cur, id_producto):
 
 
 def _validar_cd_autorizado(cur, id_producto, nombre):
+    """Regla: el CD solo abastece si su costo global es menor que el externo.
+    El mensaje no revela costos: las tiendas no deben conocer el costo del CD."""
     ev = evaluacion_cd(cur, id_producto)
     if not ev or not ev["CD_autorizado"]:
-        costo_cd = f"${ev['Costo_CD']}" if ev and ev["Costo_CD"] is not None else "sin compras registradas"
-        costo_ext = f"${ev['Costo_externo']}" if ev and ev["Costo_externo"] is not None else "-"
         raise ReglaNegocioError(
-            f"El CD no está autorizado para abastecer «{nombre}»: su costo de adquisición ({costo_cd}) "
-            f"no es menor que el costo de los proveedores externos ({costo_ext}).")
+            f"El Centro de Distribución no puede abastecer «{nombre}» en este momento: su costo de compra "
+            "no es menor que el de los proveedores externos. Cómpralo a un proveedor externo.")
 
 
 def _validar_items(items):
