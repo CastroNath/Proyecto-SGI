@@ -1,6 +1,7 @@
 import streamlit as st
 import mysql.connector
 from config.conexion import obtener_conexion
+from modulos.formato import tabla
 
 def fmt_dui(k):
     n = "".join(filter(str.isdigit, st.session_state.get(k, "")))[:9]
@@ -113,7 +114,7 @@ def mostrar_proveedores():
 
         st.subheader("Directorio de Proveedores")
         st.caption("El Centro de Distribución es proveedor interno de las tiendas y no se edita aquí.")
-        st.dataframe(provs, width="stretch", hide_index=True)
+        tabla(provs, width="stretch", hide_index=True)
         st.divider()
         st.subheader("✏️ Editar Información")
 
