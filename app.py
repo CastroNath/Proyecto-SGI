@@ -1,5 +1,4 @@
 import streamlit as st
-import streamlit.components.v1 as components
 from modulos.login import login
 from modulos.categorias import mostrar_categorias
 from modulos.productos import mostrar_productos
@@ -95,7 +94,7 @@ st.markdown("""
 # Streamlit dibuja los number_input enteros con max="9007199254740991";
 # los de dinero (decimales) no se tocan.
 # ---------------------------------------------------------------------------
-components.html("""
+_SOLO_ENTEROS = """
 <script>
 (function () {
   const doc = window.parent.document;
@@ -115,7 +114,12 @@ components.html("""
   }, true);
 })();
 </script>
-""", height=0)
+"""
+if hasattr(st, "iframe"):          # Streamlit 1.5x en adelante
+    st.iframe(_SOLO_ENTEROS, height=1)
+else:                               # versiones anteriores
+    import streamlit.components.v1 as components
+    components.html(_SOLO_ENTEROS, height=0)
 
 if "sesion_iniciada" not in st.session_state:
     st.session_state["sesion_iniciada"] = False
