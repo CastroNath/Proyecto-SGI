@@ -35,13 +35,22 @@ def formatear_telefono(texto):
 def _formulario_cliente_tienda(id_tienda):
     """Registro de clientes de la tienda; los datos de crédito fiscal solo si se requieren."""
     ccf = st.checkbox("🧾 Este cliente requiere **Comprobante de Crédito Fiscal** (CCF)", key="cli_ccf")
-    with st.form(f"form_cliente_{ccf}", clear_on_submit=True):
+    tipo_doc = "NIT"
+    if ccf:
+        # Fuera del formulario para que el campo cambie en cuanto se elige el tipo
+        tipo_doc = st.radio("Documento de identificación *", ["DUI", "NIT"], horizontal=True, key="cli_tipo_doc",
+                            help="DUI: 9 dígitos (persona natural, homologado como NIT). NIT: 14 dígitos.")
+    with st.form(f"form_cliente_{ccf}_{tipo_doc}", clear_on_submit=True):
         nombre = st.text_input("Nombre o razón social *" if ccf else "Nombre del cliente *",
                                placeholder="Ej. Comedor La Bendición, S.A. de C.V." if ccf else "Ej. María González")
         if ccf:
             c1, c2 = st.columns(2)
-            nit = c1.text_input("NIT o DUI *", placeholder="0614-010190-101-1 o 01234567-8",
-                                help="DUI de 9 dígitos (homologado como NIT) o NIT de 14 dígitos. Los guiones son opcionales.")
+            if tipo_doc == "DUI":
+                nit = c1.text_input("Número de DUI *", placeholder="00000000-0", max_chars=10,
+                                    help="Escribe solo los 9 números; el guion se agrega solo.")
+            else:
+                nit = c1.text_input("Número de NIT *", placeholder="0000-000000-000-0", max_chars=17,
+                                    help="Escribe solo los 14 números; los guiones se agregan solos.")
             nrc = c2.text_input("NRC *", placeholder="123456-7", help="Número de Registro de Contribuyente.")
             giro = st.text_input("Giro o actividad económica *", placeholder="Ej. Venta de comida preparada")
             direccion = st.text_input("Dirección *", placeholder="Ej. Calle Libertad #10, Santa Ana")
@@ -67,9 +76,11 @@ def _formulario_cliente_tienda(id_tienda):
     datos = {"NIT": None, "NRC": None, "Giro": None, "Direccion": None, "Telefono": None, "Correo": None}
     if ccf:
         errores = []
-        datos["NIT"] = formatear_nit(nit)
+        digitos = len(_solo_digitos(nit))
+        esperados = 9 if tipo_doc == "DUI" else 14
+        datos["NIT"] = formatear_nit(nit) if digitos == esperados else None
         if not datos["NIT"]:
-            errores.append("El NIT/DUI debe tener 14 dígitos (NIT) o 9 dígitos (DUI).")
+            errores.append(f"El {tipo_doc} debe tener {esperados} números (escribiste {digitos}).")
         datos["NRC"] = formatear_nrc(nrc)
         if not datos["NRC"]:
             errores.append("El NRC debe tener entre 2 y 8 dígitos (ej. 123456-7).")
@@ -90,7 +101,7 @@ def _formulario_cliente_tienda(id_tienda):
                 errores.append("El correo no tiene un formato válido.")
         if datos["NIT"] and consultar("SELECT 1 FROM Cliente WHERE NIT = %s AND id_tienda_registro = %s",
                                       (datos["NIT"], id_tienda)):
-            errores.append(f"Ya tienes un cliente registrado con el NIT/DUI {datos['NIT']}.")
+            errores.append(f"Ya tienes un cliente registrado con el {tipo_doc} {datos['NIT']}.")
         if errores:
             st.error("❌ Revisa los datos:\n\n" + "\n".join(f"- {e}" for e in errores))
             return
