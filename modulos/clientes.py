@@ -51,11 +51,14 @@ def _formulario_cliente_tienda(id_tienda):
             else:
                 nit = c1.text_input("Número de NIT *", placeholder="0000-000000-000-0", max_chars=17,
                                     help="Escribe solo los 14 números; los guiones se agregan solos.")
-            nrc = c2.text_input("NRC *", placeholder="123456-7", help="Número de Registro de Contribuyente.")
+            nrc = c2.text_input("NRC *", placeholder="123456-7", max_chars=9,
+                                help="Número de Registro de Contribuyente: escribe solo los números "
+                                     "(hasta 8); el guion antes del dígito verificador se agrega solo.")
             giro = st.text_input("Giro o actividad económica *", placeholder="Ej. Venta de comida preparada")
             direccion = st.text_input("Dirección *", placeholder="Ej. Calle Libertad #10, Santa Ana")
             c3, c4 = st.columns(2)
-            telefono = c3.text_input("Teléfono", placeholder="0000-0000")
+            telefono = c3.text_input("Teléfono de contacto", placeholder="0000-0000", max_chars=9,
+                                     help="8 números; el guion se agrega solo. Opcional.")
             correo = c4.text_input("Correo electrónico", placeholder="cliente@correo.com")
         guardar = st.form_submit_button("Guardar cliente")
 
