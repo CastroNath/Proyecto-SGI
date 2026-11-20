@@ -113,6 +113,33 @@ _SOLO_ENTEROS = """
     if (esEntero(e.target) && /[^0-9]/.test(t)) e.preventDefault();
   }, true);
 })();
+
+// Documentos de El Salvador: solo números y guiones automáticos mientras se escribe.
+// Se aplica a los campos cuya etiqueta es exactamente una de estas.
+(function () {
+  const doc = window.parent.document;
+  if (doc.__formatosSV) return;
+  doc.__formatosSV = true;
+  const FORMATOS = {
+    "Número de DUI *": [9,  d => d.length > 8 ? d.slice(0, 8) + "-" + d.slice(8) : d],
+    "Número de NIT *": [14, d => [d.slice(0, 4), d.slice(4, 10), d.slice(10, 13), d.slice(13)]
+                                   .filter(x => x).join("-")],
+  };
+  const formato = el => el && el.tagName === "INPUT" && FORMATOS[el.getAttribute("aria-label")];
+  const asignar = Object.getOwnPropertyDescriptor(window.parent.HTMLInputElement.prototype, "value").set;
+  doc.addEventListener("beforeinput", e => {
+    if (formato(e.target) && e.data && /[^0-9]/.test(e.data)) e.preventDefault();   // solo dígitos
+  }, true);
+  doc.addEventListener("input", e => {
+    const f = formato(e.target);
+    if (!f) return;
+    const v = f[1](e.target.value.replace(/[^0-9]/g, "").slice(0, f[0]));
+    if (v !== e.target.value) {
+      asignar.call(e.target, v);
+      e.target.dispatchEvent(new Event("input", { bubbles: true }));   // avisar a Streamlit
+    }
+  }, true);
+})();
 </script>
 """
 if hasattr(st, "iframe"):          # Streamlit 1.5x en adelante
