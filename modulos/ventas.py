@@ -7,11 +7,13 @@ from modulos.negocio import ReglaNegocioError, ahora_sv, registrar_venta
 from modulos.formato import tabla
 
 
-def obtener_clientes(solo_tiendas):
+def obtener_clientes(solo_tiendas, id_tienda=None):
     if solo_tiendas:
         return consultar("SELECT id_cliente, Nombre FROM Cliente WHERE Tipo='Tienda' AND id_tienda IS NOT NULL "
                          "ORDER BY Nombre")
-    return consultar("SELECT id_cliente, Nombre FROM Cliente WHERE id_cliente <> 1 AND Tipo <> 'Tienda' ORDER BY Nombre")
+    # Cada tienda factura solo a los clientes que ella registró
+    return consultar("""SELECT id_cliente, Nombre, NIT, NRC FROM Cliente
+                        WHERE Tipo = 'Publico general' AND id_tienda_registro = %s ORDER BY Nombre""", (id_tienda,))
 
 
 def obtener_productos_disponibles(id_tienda, solo_autorizados_cd=False):
@@ -55,13 +57,16 @@ def mostrar_ventas():
             factura = st.checkbox("🧾 El cliente requiere factura con nombre", key=f"fact_{r}",
                                   disabled=len(carrito) > 0)
             if factura:
-                clientes = obtener_clientes(solo_tiendas=False)
+                clientes = obtener_clientes(solo_tiendas=False, id_tienda=id_tienda)
                 sel = st.selectbox("Cliente", [None] + clientes, key=f"cli_{clave}_{r}",
-                                   format_func=lambda x: "-- Selecciona un cliente --" if x is None else x["Nombre"],
+                                   format_func=lambda x: "-- Selecciona un cliente --" if x is None else
+                                   x["Nombre"] + (f" · Crédito fiscal · NRC {x['NRC']}" if x["NRC"] else ""),
                                    disabled=len(carrito) > 0)
                 id_cliente = sel["id_cliente"] if sel else None
+                if sel and sel["NRC"]:
+                    st.caption(f"🧾 Comprobante de Crédito Fiscal · NIT {sel['NIT']} · NRC {sel['NRC']}")
                 if not clientes:
-                    st.caption("No hay clientes registrados; regístralos en Catálogos → Clientes.")
+                    st.caption("No tienes clientes registrados; regístralos en Catálogos y Registros → Clientes.")
             else:
                 st.caption("⚡ Venta rápida: se registra como **Consumidor final**.")
                 id_cliente = 1
