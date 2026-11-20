@@ -23,9 +23,9 @@ def formatear_nit(texto):
 
 def formatear_nrc(texto):
     """NRC: hasta 7 dígitos (6 del registro + 1 verificador, ej. 123456-7).
-    Los NRC antiguos pueden tener menos dígitos, por eso se aceptan de 2 a 7."""
+    Los NRC antiguos pueden tener menos dígitos, por eso se aceptan de 3 a 7."""
     d = _solo_digitos(texto)
-    return f"{d[:-1]}-{d[-1]}" if 2 <= len(d) <= 7 else None
+    return f"{d[:-1]}-{d[-1]}" if 3 <= len(d) <= 7 else None
 
 
 def formatear_telefono(texto):
@@ -33,101 +33,168 @@ def formatear_telefono(texto):
     return f"{d[:4]}-{d[4:]}" if len(d) == 8 else None
 
 
-def _formulario_cliente_tienda(id_tienda):
-    """Registro de clientes de la tienda; los datos de crédito fiscal solo si se requieren."""
-    ccf = st.checkbox("🧾 Este cliente requiere **Comprobante de Crédito Fiscal** (CCF)", key="cli_ccf")
+def _formulario_cliente(clave, actual=None):
+    """Formulario de cliente (registro o edición). Los campos de crédito fiscal aparecen solo si se piden.
+    `actual` trae los datos del cliente cuando se edita. Devuelve los valores escritos o None si no se envió."""
+    actual = actual or {}
+    ccf = st.checkbox("🧾 Este cliente requiere **Comprobante de Crédito Fiscal** (CCF)",
+                      value=bool(actual.get("NRC")), key=f"{clave}_ccf")
     tipo_doc = "NIT"
     if ccf:
         # Fuera del formulario para que el campo cambie en cuanto se elige el tipo
-        tipo_doc = st.radio("Documento de identificación *", ["DUI", "NIT"], horizontal=True, key="cli_tipo_doc",
+        doc_actual = actual.get("NIT") or ""
+        tipo_doc = st.radio("Documento de identificación *", ["DUI", "NIT"], horizontal=True,
+                            index=0 if len(_solo_digitos(doc_actual)) == 9 else 1, key=f"{clave}_tipo_doc",
                             help="DUI: 9 dígitos (persona natural, homologado como NIT). NIT: 14 dígitos.")
-    with st.form(f"form_cliente_{ccf}_{tipo_doc}", clear_on_submit=True):
-        nombre = st.text_input("Nombre o razón social *" if ccf else "Nombre del cliente *",
-                               placeholder="Ej. Comedor La Bendición, S.A. de C.V." if ccf else "Ej. María González")
+    valores = {"ccf": ccf, "tipo_doc": tipo_doc, "nit": "", "nrc": "", "giro": "", "direccion": "",
+               "telefono": "", "correo": ""}
+    editar = bool(actual)
+    with st.form(f"{clave}_form_{ccf}_{tipo_doc}", clear_on_submit=not editar):
+        valores["nombre"] = st.text_input("Nombre o razón social *" if ccf else "Nombre del cliente *",
+                                          value=actual.get("Nombre", ""),
+                                          placeholder="Ej. Comedor La Bendición, S.A. de C.V." if ccf
+                                          else "Ej. María González")
         if ccf:
+            # Conserva el documento solo si coincide con el tipo elegido
+            doc = actual.get("NIT") or ""
+            doc = doc if len(_solo_digitos(doc)) == (9 if tipo_doc == "DUI" else 14) else ""
             c1, c2 = st.columns(2)
             if tipo_doc == "DUI":
-                nit = c1.text_input("Número de DUI *", placeholder="00000000-0", max_chars=10,
-                                    help="Escribe solo los 9 números; el guion se agrega solo.")
+                valores["nit"] = c1.text_input("Número de DUI *", value=doc, placeholder="00000000-0", max_chars=10,
+                                               help="Escribe solo los 9 números; el guion se agrega solo.")
             else:
-                nit = c1.text_input("Número de NIT *", placeholder="0000-000000-000-0", max_chars=17,
-                                    help="Escribe solo los 14 números; los guiones se agregan solos.")
-            nrc = c2.text_input("NRC *", placeholder="123456-7", max_chars=8,
-                                help="Número de Registro de Contribuyente: escribe solo los números "
-                                     "(hasta 7); el guion antes del dígito verificador se agrega solo.")
-            giro = st.text_input("Giro o actividad económica *", placeholder="Ej. Venta de comida preparada")
-            direccion = st.text_input("Dirección *", placeholder="Ej. Calle Libertad #10, Santa Ana")
+                valores["nit"] = c1.text_input("Número de NIT *", value=doc, placeholder="0000-000000-000-0",
+                                               max_chars=17,
+                                               help="Escribe solo los 14 números; los guiones se agregan solos.")
+            valores["nrc"] = c2.text_input("NRC *", value=actual.get("NRC") or "", placeholder="123456-7", max_chars=8,
+                                           help="Número de Registro de Contribuyente: escribe solo los números "
+                                                "(hasta 7); el guion antes del dígito verificador se agrega solo.")
+            valores["giro"] = st.text_input("Giro o actividad económica *", value=actual.get("Giro") or "",
+                                            placeholder="Ej. Venta de comida preparada")
+            valores["direccion"] = st.text_input("Dirección *", value=actual.get("Direccion") or "",
+                                                 placeholder="Ej. Calle Libertad #10, Santa Ana")
             c3, c4 = st.columns(2)
-            telefono = c3.text_input("Teléfono de contacto", placeholder="0000-0000", max_chars=9,
-                                     help="8 números; el guion se agrega solo. Opcional.")
-            correo = c4.text_input("Correo electrónico", placeholder="cliente@correo.com")
-        guardar = st.form_submit_button("Guardar cliente")
+            valores["telefono"] = c3.text_input("Teléfono de contacto", value=actual.get("Telefono") or "",
+                                                placeholder="0000-0000", max_chars=9,
+                                                help="8 números; el guion se agrega solo. Opcional.")
+            valores["correo"] = c4.text_input("Correo electrónico", value=actual.get("Correo") or "",
+                                              placeholder="cliente@correo.com")
+        enviado = st.form_submit_button("💾 Guardar cambios" if editar else "Guardar cliente")
+    return valores if enviado else None
 
-    if not guardar:
-        return
-    nombre = nombre.strip()
+
+def _validar(v, id_tienda, excluir_id=None):
+    """Valida los datos del formulario. Devuelve (datos listos para guardar, lista de errores)."""
+    errores = []
+    excluir = excluir_id or 0
+    nombre = v["nombre"].strip()
+    datos = {"Nombre": nombre, "NIT": None, "NRC": None, "Giro": None, "Direccion": None,
+             "Telefono": None, "Correo": None}
     if not nombre:
-        st.error("❌ El nombre del cliente es obligatorio.")
-        return
-    if nombre.lower() in ("externo", "consumidor final"):
-        st.error("❌ Ese nombre está reservado por el sistema para ventas rápidas sin registro.")
-        return
-    if consultar("""SELECT 1 FROM Cliente WHERE LOWER(Nombre) = LOWER(%s) AND Tipo = 'Publico general'
-                    AND id_tienda_registro = %s""", (nombre, id_tienda)):
-        st.error(f"❌ «{nombre}» ya está registrado como cliente de tu tienda.")
-        return
+        errores.append("El nombre del cliente es obligatorio.")
+    elif nombre.lower() in ("externo", "consumidor final"):
+        errores.append("Ese nombre está reservado por el sistema para ventas sin registro.")
+    elif consultar("""SELECT 1 FROM Cliente WHERE LOWER(Nombre) = LOWER(%s) AND Tipo = 'Publico general'
+                      AND id_tienda_registro = %s AND id_cliente <> %s""", (nombre, id_tienda, excluir)):
+        errores.append(f"«{nombre}» ya está registrado como cliente de tu tienda.")
 
-    datos = {"NIT": None, "NRC": None, "Giro": None, "Direccion": None, "Telefono": None, "Correo": None}
-    if ccf:
-        errores = []
-        digitos = len(_solo_digitos(nit))
+    if v["ccf"]:
+        tipo_doc = v["tipo_doc"]
+        digitos = len(_solo_digitos(v["nit"]))
         esperados = 9 if tipo_doc == "DUI" else 14
-        datos["NIT"] = formatear_nit(nit) if digitos == esperados else None
+        datos["NIT"] = formatear_nit(v["nit"]) if digitos == esperados else None
         if not datos["NIT"]:
             errores.append(f"El {tipo_doc} debe tener {esperados} números (escribiste {digitos}).")
-        datos["NRC"] = formatear_nrc(nrc)
+        elif consultar("SELECT 1 FROM Cliente WHERE NIT = %s AND id_tienda_registro = %s AND id_cliente <> %s",
+                       (datos["NIT"], id_tienda, excluir)):
+            errores.append(f"Ya tienes otro cliente registrado con el {tipo_doc} {datos['NIT']}.")
+        datos["NRC"] = formatear_nrc(v["nrc"])
         if not datos["NRC"]:
-            errores.append("El NRC debe tener hasta 7 números (ej. 123456-7).")
-        datos["Giro"] = giro.strip() or None
+            errores.append("El NRC debe tener de 3 a 7 números (ej. 123456-7).")
+        datos["Giro"] = v["giro"].strip() or None
         if not datos["Giro"]:
             errores.append("El giro es obligatorio para crédito fiscal.")
-        datos["Direccion"] = direccion.strip() or None
+        datos["Direccion"] = v["direccion"].strip() or None
         if not datos["Direccion"]:
             errores.append("La dirección es obligatoria para crédito fiscal.")
-        if telefono.strip():
-            datos["Telefono"] = formatear_telefono(telefono)
+        if v["telefono"].strip():
+            datos["Telefono"] = formatear_telefono(v["telefono"])
             if not datos["Telefono"]:
                 errores.append("El teléfono debe tener 8 dígitos.")
-        if correo.strip():
-            if re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", correo.strip()):
-                datos["Correo"] = correo.strip().lower()
+        if v["correo"].strip():
+            if re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", v["correo"].strip()):
+                datos["Correo"] = v["correo"].strip().lower()
             else:
                 errores.append("El correo no tiene un formato válido.")
-        if datos["NIT"] and consultar("SELECT 1 FROM Cliente WHERE NIT = %s AND id_tienda_registro = %s",
-                                      (datos["NIT"], id_tienda)):
-            errores.append(f"Ya tienes un cliente registrado con el {tipo_doc} {datos['NIT']}.")
-        if errores:
-            st.error("❌ Revisa los datos:\n\n" + "\n".join(f"- {e}" for e in errores))
-            return
+    return datos, errores
 
+
+def _ejecutar(sql, params):
     cx = obtener_conexion()
     if not cx:
-        return
+        return False
     cur = cx.cursor()
     try:
-        cur.execute("""INSERT INTO Cliente (Nombre, Tipo, id_tienda_registro, NIT, NRC, Giro, Direccion, Telefono, Correo)
-                       VALUES (%s, 'Publico general', %s, %s, %s, %s, %s, %s, %s)""",
-                    (nombre, id_tienda, datos["NIT"], datos["NRC"], datos["Giro"], datos["Direccion"],
-                     datos["Telefono"], datos["Correo"]))
+        cur.execute(sql, params)
         cx.commit()
-        st.session_state["msg_exito_cli"] = (f"✅ Cliente «{nombre}» registrado"
-                                             + (" con datos de crédito fiscal." if ccf else "."))
-        st.rerun()
+        return True
     except mysql.connector.IntegrityError:
         st.error("❌ Ya existe un cliente con esos datos en tu tienda.")
+        return False
     finally:
         cur.close()
         cx.close()
+
+
+def _registrar_cliente(id_tienda):
+    v = _formulario_cliente("nuevo")
+    if v is None:
+        return
+    datos, errores = _validar(v, id_tienda)
+    if errores:
+        st.error("❌ Revisa los datos:\n\n" + "\n".join(f"- {e}" for e in errores))
+        return
+    if _ejecutar("""INSERT INTO Cliente (Nombre, Tipo, id_tienda_registro, NIT, NRC, Giro, Direccion, Telefono, Correo)
+                    VALUES (%s, 'Publico general', %s, %s, %s, %s, %s, %s, %s)""",
+                 (datos["Nombre"], id_tienda, datos["NIT"], datos["NRC"], datos["Giro"], datos["Direccion"],
+                  datos["Telefono"], datos["Correo"])):
+        st.session_state["msg_exito_cli"] = (f"✅ Cliente «{datos['Nombre']}» registrado"
+                                             + (" con datos de crédito fiscal." if v["ccf"] else "."))
+        st.rerun()
+
+
+def _editar_cliente(id_tienda):
+    clientes = consultar("""SELECT * FROM Cliente WHERE Tipo = 'Publico general' AND id_tienda_registro = %s
+                            ORDER BY Nombre""", (id_tienda,))
+    if not clientes:
+        st.info("Aún no has registrado clientes.")
+        return
+    sel = st.selectbox("Cliente a modificar", [None] + clientes, key="cli_editar_sel",
+                       format_func=lambda x: "-- Selecciona un cliente --" if x is None else
+                       x["Nombre"] + (" · Crédito fiscal" if x["NRC"] else ""))
+    if sel is None:
+        return
+    st.caption("Desmarca la casilla de crédito fiscal si el cliente ya no lo requiere: sus datos fiscales se borran "
+               "al guardar. Las ventas anteriores no cambian.")
+    v = _formulario_cliente(f"editar_{sel['id_cliente']}", actual=sel)
+    if v is None:
+        return
+    datos, errores = _validar(v, id_tienda, excluir_id=sel["id_cliente"])
+    if errores:
+        st.error("❌ Revisa los datos:\n\n" + "\n".join(f"- {e}" for e in errores))
+        return
+    nuevos = {k: datos[k] for k in ("Nombre", "NIT", "NRC", "Giro", "Direccion", "Telefono", "Correo")}
+    if all((sel.get(k) or None) == nuevos[k] for k in nuevos):
+        st.info("No cambiaste ningún dato.")
+        return
+    # La condición id_tienda_registro asegura que una tienda solo modifique sus propios clientes
+    if _ejecutar("""UPDATE Cliente SET Nombre=%s, NIT=%s, NRC=%s, Giro=%s, Direccion=%s, Telefono=%s, Correo=%s
+                    WHERE id_cliente = %s AND id_tienda_registro = %s""",
+                 (nuevos["Nombre"], nuevos["NIT"], nuevos["NRC"], nuevos["Giro"], nuevos["Direccion"],
+                  nuevos["Telefono"], nuevos["Correo"], sel["id_cliente"], id_tienda)):
+        st.session_state["msg_exito_cli"] = f"✅ Datos de «{nuevos['Nombre']}» actualizados."
+        st.session_state.pop("cli_editar_sel", None)
+        st.rerun()
 
 
 def mostrar_clientes():
@@ -177,8 +244,16 @@ def mostrar_clientes():
         return
 
     # Usuarios de tienda: solo SUS clientes
-    _formulario_cliente_tienda(id_tienda)
-    st.subheader("Mis clientes")
+    t_nuevo, t_lista, t_editar = st.tabs(["➕ Registrar cliente", "📋 Mis clientes", "✏️ Editar cliente"])
+    with t_nuevo:
+        _registrar_cliente(id_tienda)
+    with t_editar:
+        _editar_cliente(id_tienda)
+    with t_lista:
+        _lista_clientes(id_tienda)
+
+
+def _lista_clientes(id_tienda):
     clientes = consultar("""SELECT id_cliente AS ID, Nombre,
                                    IF(NRC IS NULL, 'Consumidor final', 'Crédito fiscal') AS Comprobante,
                                    IFNULL(NIT, '') AS NIT, IFNULL(NRC, '') AS NRC, IFNULL(Giro, '') AS Giro,
