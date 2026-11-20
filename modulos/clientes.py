@@ -22,9 +22,10 @@ def formatear_nit(texto):
 
 
 def formatear_nrc(texto):
-    """NRC: de 2 a 8 dígitos; el último es el dígito verificador (ej. 123456-7)."""
+    """NRC: hasta 7 dígitos (6 del registro + 1 verificador, ej. 123456-7).
+    Los NRC antiguos pueden tener menos dígitos, por eso se aceptan de 2 a 7."""
     d = _solo_digitos(texto)
-    return f"{d[:-1]}-{d[-1]}" if 2 <= len(d) <= 8 else None
+    return f"{d[:-1]}-{d[-1]}" if 2 <= len(d) <= 7 else None
 
 
 def formatear_telefono(texto):
@@ -51,9 +52,9 @@ def _formulario_cliente_tienda(id_tienda):
             else:
                 nit = c1.text_input("Número de NIT *", placeholder="0000-000000-000-0", max_chars=17,
                                     help="Escribe solo los 14 números; los guiones se agregan solos.")
-            nrc = c2.text_input("NRC *", placeholder="123456-7", max_chars=9,
+            nrc = c2.text_input("NRC *", placeholder="123456-7", max_chars=8,
                                 help="Número de Registro de Contribuyente: escribe solo los números "
-                                     "(hasta 8); el guion antes del dígito verificador se agrega solo.")
+                                     "(hasta 7); el guion antes del dígito verificador se agrega solo.")
             giro = st.text_input("Giro o actividad económica *", placeholder="Ej. Venta de comida preparada")
             direccion = st.text_input("Dirección *", placeholder="Ej. Calle Libertad #10, Santa Ana")
             c3, c4 = st.columns(2)
@@ -86,7 +87,7 @@ def _formulario_cliente_tienda(id_tienda):
             errores.append(f"El {tipo_doc} debe tener {esperados} números (escribiste {digitos}).")
         datos["NRC"] = formatear_nrc(nrc)
         if not datos["NRC"]:
-            errores.append("El NRC debe tener entre 2 y 8 dígitos (ej. 123456-7).")
+            errores.append("El NRC debe tener hasta 7 números (ej. 123456-7).")
         datos["Giro"] = giro.strip() or None
         if not datos["Giro"]:
             errores.append("El giro es obligatorio para crédito fiscal.")
