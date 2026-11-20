@@ -115,20 +115,21 @@ _SOLO_ENTEROS = """
 })();
 
 // Documentos de El Salvador: solo números y guiones automáticos mientras se escribe.
-// Se aplica a los campos cuya etiqueta es exactamente una de estas.
+// La tabla de formatos se renueva en cada carga (así una página abierta toma los cambios);
+// los escuchadores de eventos se instalan una sola vez y siempre leen la tabla vigente.
 (function () {
   const doc = window.parent.document;
-  if (doc.__formatosSV) return;
-  doc.__formatosSV = true;
-  const FORMATOS = {
+  doc.__formatosSVTabla = {
     "Número de DUI *": [9,  d => d.length > 8 ? d.slice(0, 8) + "-" + d.slice(8) : d],
     "Número de NIT *": [14, d => [d.slice(0, 4), d.slice(4, 10), d.slice(10, 13), d.slice(13)]
                                    .filter(x => x).join("-")],
     // NRC: el último número es el dígito verificador (ej. 123456-7)
-    "NRC *":           [8,  d => d.length > 1 ? d.slice(0, -1) + "-" + d.slice(-1) : d],
+    "NRC *":           [7,  d => d.length > 1 ? d.slice(0, -1) + "-" + d.slice(-1) : d],
     "Teléfono de contacto": [8, d => d.length > 4 ? d.slice(0, 4) + "-" + d.slice(4) : d],
   };
-  const formato = el => el && el.tagName === "INPUT" && FORMATOS[el.getAttribute("aria-label")];
+  if (doc.__formatosSVv2) return;
+  doc.__formatosSVv2 = true;
+  const formato = el => el && el.tagName === "INPUT" && doc.__formatosSVTabla[el.getAttribute("aria-label")];
   const asignar = Object.getOwnPropertyDescriptor(window.parent.HTMLInputElement.prototype, "value").set;
   doc.addEventListener("beforeinput", e => {
     if (formato(e.target) && e.data && /[^0-9]/.test(e.data)) e.preventDefault();   // solo dígitos
