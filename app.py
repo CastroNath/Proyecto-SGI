@@ -124,6 +124,9 @@ _SOLO_ENTEROS = """
     "Número de DUI *": [9,  d => d.length > 8 ? d.slice(0, 8) + "-" + d.slice(8) : d],
     "Número de NIT *": [14, d => [d.slice(0, 4), d.slice(4, 10), d.slice(10, 13), d.slice(13)]
                                    .filter(x => x).join("-")],
+    // NRC: el último número es el dígito verificador (ej. 123456-7)
+    "NRC *":           [8,  d => d.length > 1 ? d.slice(0, -1) + "-" + d.slice(-1) : d],
+    "Teléfono de contacto": [8, d => d.length > 4 ? d.slice(0, 4) + "-" + d.slice(4) : d],
   };
   const formato = el => el && el.tagName === "INPUT" && FORMATOS[el.getAttribute("aria-label")];
   const asignar = Object.getOwnPropertyDescriptor(window.parent.HTMLInputElement.prototype, "value").set;
