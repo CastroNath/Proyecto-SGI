@@ -58,7 +58,7 @@ def sin_vencimiento(filas):
     return filas
 
 
-def aviso_catalogo(prov_sel, prod_sel, comp, info_cd):
+def aviso_catalogo(prov_sel, prod_sel, comp, info_cd, orden_en_curso=False):
     """Avisa si el proveedor elegido no tiene el producto en su catálogo y dice quién sí lo tiene."""
     if not (prov_sel and prod_sel):
         return
@@ -71,7 +71,16 @@ def aviso_catalogo(prov_sel, prod_sel, comp, info_cd):
     otros = [f"**{f['Proveedor'].replace('🏢 ', '')}** (\\${float(f['Precio']):.2f})" for f in comp]
     nombre_prov = "El Centro de Distribución" if prov_sel["id_tienda_cd"] else f"**{prov_sel['Nombre']}**"
     msg = f"⚠️ {nombre_prov} no tiene **{prod_sel['Nombre']}** en su catálogo."
-    if otros:
+    if otros and orden_en_curso:
+        # La orden ya tiene productos y el proveedor quedó fijo: no se puede cambiar aquí
+        msg += (" Lo venden: " + ", ".join(otros) + ". Como cada orden de compra es para un solo proveedor, "
+                "primero termina esta orden con "
+                + ("el Centro de Distribución" if prov_sel["id_tienda_cd"] else nombre_prov)
+                + " y guárdala con el botón **Confirmar Orden de Compra**; después crea una orden nueva "
+                "con el otro proveedor para comprar este producto.")
+        if not prov_sel["id_tienda_cd"]:
+            msg += " Si este proveedor sí te lo vende, escribe el precio acordado y quedará en su catálogo."
+    elif otros:
         msg += " Lo venden: " + ", ".join(otros) + ". Para comprarlo, cambia de proveedor"
         msg += "." if not prov_sel["id_tienda_cd"] else " (elige un proveedor externo)."
         if not prov_sel["id_tienda_cd"]:
@@ -161,7 +170,7 @@ def mostrar_compras():
         al_cd = bool(prov_sel and prov_sel["id_tienda_cd"])
 
         if prod_sel:
-            aviso_catalogo(prov_sel, prod_sel, comp, info_cd)
+            aviso_catalogo(prov_sel, prod_sel, comp, info_cd, orden_en_curso=len(carrito) > 0)
 
         st.divider()
         # Fuera del formulario: así la fecha aparece en cuanto se marca la casilla
@@ -223,9 +232,15 @@ def mostrar_compras():
                 st.warning("⚠️ Ese producto ya está en la orden; elimínalo para cambiar la cantidad.")
             elif al_cd and not (info_cd and info_cd["CD_autorizado"]):
                 mejor = next((c["Proveedor"] for c in (comp or []) if not c["Proveedor"].startswith("🏢")), None)
-                st.error("❌ El Centro de Distribución no puede venderte este producto porque no es la opción "
-                         "más barata. " + (f"Cambia el proveedor a **{mejor}** para comprarlo."
-                                           if mejor else "Cómpralo a un proveedor externo."))
+                if carrito:
+                    st.error("❌ El Centro de Distribución no puede venderte este producto porque no es la opción "
+                             "más barata. Primero termina esta orden con el CD y guárdala con el botón **Confirmar Orden "
+                             "de Compra**; después crea una orden nueva con " + (f"**{mejor}**" if mejor else "un proveedor externo") +
+                             " para comprar este producto.")
+                else:
+                    st.error("❌ El Centro de Distribución no puede venderte este producto porque no es la opción "
+                             "más barata. " + (f"Cambia el proveedor a **{mejor}** para comprarlo."
+                                               if mejor else "Cómpralo a un proveedor externo."))
             elif al_cd and (info_cd["Existencia"] or 0) < cantidad:
                 st.error(f"❌ El CD solo tiene {info_cd['Existencia'] or 0} unidades de este producto.")
             elif precio_compra <= 0:
