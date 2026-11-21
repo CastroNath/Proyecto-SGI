@@ -2,6 +2,7 @@ import streamlit as st
 import mysql.connector
 from config.conexion import obtener_conexion
 from modulos.formato import tabla
+from config.conexion import consultar
 
 def fmt_dui(k):
     n = "".join(filter(str.isdigit, st.session_state.get(k, "")))[:9]
@@ -33,9 +34,78 @@ def validar_datos(nombre, tipo_doc, raw_doc, raw_tel):
     tel_ok = f"{nt[:4]}-{nt[4:]}" if len(nt) == 8 else None
     return True, "", doc_ok, tel_ok
 
+def lista_de_precios():
+    """Registra qué proveedor vende cada producto y a qué precio (tabla ProductoxProveedor).
+    Con esto se arma la comparativa de precios al hacer una compra."""
+    st.subheader("💲 Lista de precios por proveedor")
+    st.caption("Registra a qué precio vende cada proveedor un producto. Estos precios son los que aparecen "
+               "en la comparativa al hacer una compra. Al recibir una compra, el precio se actualiza solo.")
+    if st.session_state.get("ok_precio"):
+        st.success(st.session_state.pop("ok_precio"))
+
+    productos = consultar("SELECT id_producto, Nombre, Unidad_medida, Codigo_barras FROM Producto ORDER BY Nombre")
+    prod = st.selectbox("Producto", productos, index=None, placeholder="Selecciona un producto", key="lp_prod",
+                        format_func=lambda x: f"{x['Nombre']} ({x['Unidad_medida']}) - {x['Codigo_barras']}")
+    if prod is None:
+        sin_precio = consultar("""SELECT p.Nombre AS Producto, p.Unidad_medida AS Unidad, p.Codigo_barras AS Código
+                                  FROM Producto p
+                                  WHERE NOT EXISTS (SELECT 1 FROM ProductoxProveedor pp
+                                                    JOIN Proveedor pv ON pv.id_proveedor = pp.id_proveedor
+                                                    WHERE pp.id_producto = p.id_producto AND pv.id_tienda_cd IS NULL
+                                                      AND pp.Ultimo_precio IS NOT NULL)
+                                  ORDER BY p.Nombre""")
+        if sin_precio:
+            st.warning(f"⚠️ {len(sin_precio)} producto(s) todavía no tienen ningún proveedor con precio, "
+                       "así que no tendrán comparativa al comprarlos:")
+            tabla(sin_precio)
+        else:
+            st.success("✅ Todos los productos tienen al menos un proveedor con precio.")
+        return
+
+    actuales = consultar("""SELECT pv.Nombre AS Proveedor, pp.Ultimo_precio AS Precio,
+                                   pp.Fecha_ultima_compra AS Última_compra
+                            FROM ProductoxProveedor pp JOIN Proveedor pv ON pv.id_proveedor = pp.id_proveedor
+                            WHERE pp.id_producto = %s AND pv.id_tienda_cd IS NULL AND pp.Ultimo_precio IS NOT NULL
+                            ORDER BY pp.Ultimo_precio""", (prod["id_producto"],))
+    if actuales:
+        for a in actuales:
+            if a["Última_compra"] is None:
+                a["Última_compra"] = "Sin compras aún"
+        tabla(actuales)
+    else:
+        st.info("Este producto todavía no tiene proveedores con precio.")
+
+    proveedores = consultar("SELECT id_proveedor, Nombre FROM Proveedor WHERE id_tienda_cd IS NULL ORDER BY Nombre")
+    with st.form(f"form_precio_{prod['id_producto']}", clear_on_submit=True):
+        c1, c2 = st.columns(2)
+        prov = c1.selectbox("Proveedor", proveedores, index=None, placeholder="Selecciona un proveedor",
+                            format_func=lambda x: x["Nombre"])
+        precio = c2.number_input(f"Precio por {prod['Unidad_medida'].lower()} ($)", min_value=0.01, step=0.05,
+                                 format="%.2f", value=None)
+        st.caption("Si el proveedor ya tenía precio para este producto, se reemplaza por el nuevo.")
+        guardar = st.form_submit_button("💾 Guardar precio")
+    if guardar:
+        if prov is None:
+            st.error("⚠️ Selecciona el proveedor.")
+        elif not precio:
+            st.error("⚠️ Escribe el precio.")
+        else:
+            cx = obtener_conexion(); cur = cx.cursor()
+            cur.execute("""INSERT INTO ProductoxProveedor (id_producto, id_proveedor, Ultimo_precio)
+                           VALUES (%s, %s, %s)
+                           ON DUPLICATE KEY UPDATE Ultimo_precio = VALUES(Ultimo_precio)""",
+                        (prod["id_producto"], prov["id_proveedor"], round(precio, 2)))
+            cx.commit(); cur.close(); cx.close()
+            st.session_state["ok_precio"] = (f"✅ {prov['Nombre']} vende {prod['Nombre']} a \\${precio:.2f}.")
+            st.rerun()
+
+
 def mostrar_proveedores():
     st.header("🚚 Gestión de Proveedores")
-    tab1, tab2 = st.tabs(["➕ Registrar Nuevo Proveedor", "📋 Directorio y Edición"])
+    tab1, tab2, tab3 = st.tabs(["➕ Registrar Nuevo Proveedor", "📋 Directorio y Edición", "💲 Lista de precios"])
+
+    with tab3:
+        lista_de_precios()
 
     with tab1:
         if st.session_state.get("limpiar_prov", False):
