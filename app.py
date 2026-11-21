@@ -126,6 +126,11 @@ _SOLO_ENTEROS = """
     // NRC: el último número es el dígito verificador (ej. 123456-7)
     "NRC *":           [7,  d => d.length > 1 ? d.slice(0, -1) + "-" + d.slice(-1) : d],
     "Teléfono de contacto": [8, d => d.length > 4 ? d.slice(0, 4) + "-" + d.slice(4) : d],
+    // Proveedores (registro y edición)
+    "Número de DUI":   [9,  d => d.length > 8 ? d.slice(0, 8) + "-" + d.slice(8) : d],
+    "Número de NIT":   [14, d => [d.slice(0, 4), d.slice(4, 10), d.slice(10, 13), d.slice(13)]
+                                   .filter(x => x).join("-")],
+    "Teléfono":        [8,  d => d.length > 4 ? d.slice(0, 4) + "-" + d.slice(4) : d],
   };
   if (doc.__formatosSVv2) return;
   doc.__formatosSVv2 = true;
