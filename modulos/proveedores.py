@@ -57,11 +57,11 @@ def mostrar_proveedores():
 
         raw_doc = ""
         if tdoc == "DUI":
-            raw_doc = st.text_input("Número de DUI", max_chars=10 if "-" in st.session_state["p_dui"] else 9, placeholder="00000000-0", key="p_dui", on_change=fmt_dui, args=("p_dui",))
+            raw_doc = st.text_input("Número de DUI", max_chars=10, placeholder="00000000-0", help="Escribe solo los 9 números; el guion se agrega solo.", key="p_dui")
         elif tdoc == "NIT":
-            raw_doc = st.text_input("Número de NIT", max_chars=17 if "-" in st.session_state["p_nit"] else 14, placeholder="0000-000000-000-0", key="p_nit", on_change=fmt_nit, args=("p_nit",))
+            raw_doc = st.text_input("Número de NIT", max_chars=17, placeholder="0000-000000-000-0", help="Escribe solo los 14 números; los guiones se agregan solos.", key="p_nit")
 
-        raw_tel = st.text_input("Teléfono", max_chars=9 if "-" in st.session_state["p_tel"] else 8, placeholder="0000-0000", key="p_tel", on_change=fmt_tel, args=("p_tel",))
+        raw_tel = st.text_input("Teléfono", max_chars=9, placeholder="0000-0000", help="Escribe solo los 8 números; el guion se agrega solo.", key="p_tel")
 
         if st.button("Guardar Proveedor", key="btn_save_p"):
             valido, err, doc_f, tel_f = validar_datos(nom, tdoc, raw_doc, raw_tel)
@@ -151,11 +151,11 @@ def mostrar_proveedores():
 
         eraw_doc = ""
         if etdoc == "DUI":
-            eraw_doc = st.text_input("Número de DUI", max_chars=10 if "-" in st.session_state["ed_dui"] else 9, placeholder="00000000-0", key="ed_dui", on_change=fmt_dui, args=("ed_dui",), disabled=(sel is None))
+            eraw_doc = st.text_input("Número de DUI", max_chars=10, placeholder="00000000-0", help="Escribe solo los 9 números; el guion se agrega solo.", key="ed_dui", disabled=(sel is None))
         elif etdoc == "NIT":
-            eraw_doc = st.text_input("Número de NIT", max_chars=17 if "-" in st.session_state["ed_nit"] else 14, placeholder="0000-000000-000-0", key="ed_nit", on_change=fmt_nit, args=("ed_nit",), disabled=(sel is None))
+            eraw_doc = st.text_input("Número de NIT", max_chars=17, placeholder="0000-000000-000-0", help="Escribe solo los 14 números; los guiones se agregan solos.", key="ed_nit", disabled=(sel is None))
 
-        eraw_tel = st.text_input("Teléfono", max_chars=9 if "-" in st.session_state["ed_tel"] else 8, placeholder="0000-0000", key="ed_tel", on_change=fmt_tel, args=("ed_tel",), disabled=(sel is None))
+        eraw_tel = st.text_input("Teléfono", max_chars=9, placeholder="0000-0000", help="Escribe solo los 8 números; el guion se agrega solo.", key="ed_tel", disabled=(sel is None))
 
         if st.button("💾 Actualizar Proveedor", key="btn_upd_p", disabled=(sel is None)):
             valido, err, doc_f, tel_f = validar_datos(enom, etdoc, eraw_doc, eraw_tel)
