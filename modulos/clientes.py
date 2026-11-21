@@ -37,8 +37,8 @@ def _formulario_cliente(clave, actual=None):
     """Formulario de cliente (registro o edición). Los campos de crédito fiscal aparecen solo si se piden.
     `actual` trae los datos del cliente cuando se edita. Devuelve los valores escritos o None si no se envió."""
     actual = actual or {}
-    ccf = st.checkbox("🧾 Este cliente requiere **Comprobante de Crédito Fiscal** (CCF)",
-                      value=bool(actual.get("NRC")), key=f"{clave}_ccf")
+    # Solo se registran clientes de crédito fiscal; las ventas sin registro son a consumidor final
+    ccf = True
     tipo_doc = "NIT"
     if ccf:
         # Fuera del formulario para que el campo cambie en cuanto se elige el tipo
@@ -158,8 +158,7 @@ def _registrar_cliente(id_tienda):
                     VALUES (%s, 'Publico general', %s, %s, %s, %s, %s, %s, %s)""",
                  (datos["Nombre"], id_tienda, datos["NIT"], datos["NRC"], datos["Giro"], datos["Direccion"],
                   datos["Telefono"], datos["Correo"])):
-        st.session_state["msg_exito_cli"] = (f"✅ Cliente «{datos['Nombre']}» registrado"
-                                             + (" con datos de crédito fiscal." if v["ccf"] else "."))
+        st.session_state["msg_exito_cli"] = f"✅ Cliente «{datos['Nombre']}» registrado para crédito fiscal."
         st.rerun()
 
 
@@ -174,8 +173,8 @@ def _editar_cliente(id_tienda):
                        x["Nombre"] + (" · Crédito fiscal" if x["NRC"] else ""))
     if sel is None:
         return
-    st.caption("Desmarca la casilla de crédito fiscal si el cliente ya no lo requiere: sus datos fiscales se borran "
-               "al guardar. Las ventas anteriores no cambian.")
+    if not sel["NRC"]:
+        st.warning("⚠️ A este cliente le faltan sus datos de crédito fiscal. Complétalos para poder facturarle.")
     v = _formulario_cliente(f"editar_{sel['id_cliente']}", actual=sel)
     if v is None:
         return
@@ -246,6 +245,8 @@ def mostrar_clientes():
     # Usuarios de tienda: solo SUS clientes
     t_nuevo, t_lista, t_editar = st.tabs(["➕ Registrar cliente", "📋 Mis clientes", "✏️ Editar cliente"])
     with t_nuevo:
+        st.caption("🧾 Registra aquí a los clientes que piden **Comprobante de Crédito Fiscal**. "
+                   "Las ventas sin cliente se registran como consumidor final y no necesitan registro.")
         _registrar_cliente(id_tienda)
     with t_editar:
         _editar_cliente(id_tienda)
@@ -255,7 +256,7 @@ def mostrar_clientes():
 
 def _lista_clientes(id_tienda):
     clientes = consultar("""SELECT id_cliente AS ID, Nombre,
-                                   IF(NRC IS NULL, 'Consumidor final', 'Crédito fiscal') AS Comprobante,
+                                   IF(NRC IS NULL, '⚠️ Faltan datos fiscales', '') AS Pendiente,
                                    IFNULL(NIT, '') AS NIT, IFNULL(NRC, '') AS NRC, IFNULL(Giro, '') AS Giro,
                                    IFNULL(Direccion, '') AS `Dirección`, IFNULL(Telefono, '') AS `Teléfono`,
                                    IFNULL(Correo, '') AS Correo
@@ -263,6 +264,7 @@ def _lista_clientes(id_tienda):
                             WHERE Tipo = 'Publico general' AND id_tienda_registro = %s
                             ORDER BY Nombre""", (id_tienda,))
     if not clientes:
-        st.info("Aún no has registrado clientes. Las ventas sin cliente se registran como consumidor final.")
+        st.info("Aún no has registrado clientes de crédito fiscal. Las ventas sin cliente se registran como "
+                "consumidor final.")
     else:
         tabla(clientes)
