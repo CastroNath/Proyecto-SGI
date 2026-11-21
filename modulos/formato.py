@@ -37,18 +37,44 @@ def es_identificador(col):
     return n == "id" or n.startswith("id_") or n.startswith("id ") or n in ("documento", "despacho_cd")
 
 
+def _texto(valor, dinero):
+    """1234.5 -> '$1,234.50' (dinero) o '1,234' (cantidad), siempre con coma de miles y punto decimal,
+    sin importar el idioma del navegador."""
+    if valor is None or (isinstance(valor, float) and pd.isna(valor)):
+        return ""
+    v = float(valor)
+    if dinero:
+        return f"-${abs(v):,.2f}" if v < 0 else f"${v:,.2f}"
+    return f"{v:,.0f}" if v == int(v) else f"{v:,.2f}"
+
+
+def _alinear(textos):
+    """Rellena con espacios a la izquierda para que al ordenar la columna quede en orden numérico."""
+    ancho = max((len(t) for t in textos), default=0)
+    return [t.rjust(ancho) if t else t for t in textos]
+
+
 def tabla(data, column_config=None, **kwargs):
     """Igual que st.dataframe, con formato $1,234.56 en las columnas de dinero, coma de miles
     en las demás cantidades (1,234) y los guiones bajos de los encabezados cambiados por espacios."""
+    columnas = _columnas(data)
     config = {}
-    for col in _columnas(data):
+    convertir = {}
+    for col in columnas:
         etiqueta = str(col).replace("_", " ")
-        if es_dinero(col):
-            config[col] = st.column_config.NumberColumn(etiqueta, format="dollar")
+        if es_dinero(col) and _es_numero(data, col):
+            convertir[col] = True
+            config[col] = st.column_config.TextColumn(etiqueta, alignment="right")
         elif _es_numero(data, col) and not es_identificador(col):
-            config[col] = st.column_config.NumberColumn(etiqueta, format="localized")
+            convertir[col] = False
+            config[col] = st.column_config.TextColumn(etiqueta, alignment="right")
         elif etiqueta != col:
             config[col] = st.column_config.Column(etiqueta)
+    if convertir:
+        df = data.copy() if isinstance(data, pd.DataFrame) else pd.DataFrame(data, columns=columnas)
+        for col, dinero in convertir.items():
+            df[col] = _alinear([_texto(v, dinero) for v in df[col]])
+        data = df
     config.update(column_config or {})  # lo que indique cada pantalla tiene prioridad
     kwargs.setdefault("width", "stretch")
     kwargs.setdefault("hide_index", True)
