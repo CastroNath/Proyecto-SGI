@@ -6,6 +6,41 @@ from modulos.negocio import hash_password
 from modulos.formato import tabla
 
 
+# Cupo de usuarios activos por tienda según el rol (se reconoce el rol por su nombre)
+LIMITES_POR_ROL = {"encargado": 1, "cajero": 5}
+
+
+def limite_del_rol(nombre_rol):
+    n = (nombre_rol or "").lower()
+    for clave, maximo in LIMITES_POR_ROL.items():
+        if clave in n:
+            return maximo
+    return None  # sin límite (p. ej. Administrador)
+
+
+def revisar_cupo(cursor, id_rol, id_tienda, excluir_usuario=0):
+    """Devuelve un mensaje de error si la tienda ya llegó al máximo de usuarios ACTIVOS de ese rol."""
+    cursor.execute("SELECT Nombre FROM Rol WHERE id_rol = %s", (id_rol,))
+    fila = cursor.fetchone()
+    nombre_rol = fila[0] if fila else ""
+    maximo = limite_del_rol(nombre_rol)
+    if maximo is None:
+        return None
+    cursor.execute("""SELECT COUNT(*) FROM Usuario
+                      WHERE id_tienda = %s AND id_rol = %s AND Activo = 1 AND id_usuario <> %s""",
+                   (id_tienda, id_rol, excluir_usuario))
+    activos = cursor.fetchone()[0]
+    if activos >= maximo:
+        cursor.execute("SELECT Nombre FROM Tienda WHERE id_tienda = %s", (id_tienda,))
+        tienda = cursor.fetchone()[0]
+        if maximo == 1:
+            return (f"❌ «{tienda}» ya tiene un {nombre_rol.lower()} activo. Solo se permite uno por tienda; "
+                    "si lo vas a reemplazar, desactiva primero al actual en «Usuarios registrados».")
+        return (f"❌ «{tienda}» ya tiene {activos} usuarios con rol {nombre_rol.lower()} activos "
+                f"(máximo {maximo} por tienda). Desactiva uno para registrar otro.")
+    return None
+
+
 def registrar_usuario(id_rol, id_tienda, nombre, usuario, contrasena):
     conexion = obtener_conexion()
     if conexion is None:
@@ -15,6 +50,9 @@ def registrar_usuario(id_rol, id_tienda, nombre, usuario, contrasena):
         cursor.execute("SELECT id_usuario FROM Usuario WHERE LOWER(Usuario) = LOWER(%s)", (usuario,))
         if cursor.fetchone():
             return False, f"❌ El nombre de usuario '{usuario}' ya está en uso. Elige otro."
+        error_cupo = revisar_cupo(cursor, id_rol, id_tienda)
+        if error_cupo:
+            return False, error_cupo
         cursor.execute("""INSERT INTO Usuario (id_rol, id_tienda, Nombre, Usuario, Contrasena)
                           VALUES (%s, %s, %s, %s, %s)""",
                        (id_rol, id_tienda, nombre, usuario, hash_password(contrasena)))
@@ -126,6 +164,19 @@ def mostrar_registro():
 
         roles = consultar("SELECT id_rol, Nombre FROM Rol WHERE id_rol <> 1 ORDER BY id_rol")
         tiendas = consultar("SELECT id_tienda, Nombre FROM Tienda ORDER BY Nombre")
+        with st.expander("👥 Cupos por tienda (1 encargado y hasta 5 cajeros activos)", expanded=True):
+            cupos = []
+            for t in tiendas:
+                fila = {"Tienda": t["Nombre"]}
+                for r in roles:
+                    maximo = limite_del_rol(r["Nombre"])
+                    if maximo is None:
+                        continue
+                    n = consultar("""SELECT COUNT(*) AS n FROM Usuario WHERE id_tienda=%s AND id_rol=%s AND Activo=1""",
+                                  (t["id_tienda"], r["id_rol"]))[0]["n"]
+                    fila[r["Nombre"]] = f"{n} de {maximo}" + (" (completo)" if n >= maximo else "")
+                cupos.append(fila)
+            tabla(cupos)
         if not roles or not tiendas:
             st.warning("⚠️ Faltan roles operativos o tiendas en la base de datos.")
         else:
@@ -163,9 +214,19 @@ def mostrar_registro():
                     st.error("No puedes desactivar tu propia cuenta.")
                 else:
                     cx = obtener_conexion(); cur = cx.cursor()
-                    cur.execute("UPDATE Usuario SET Activo = 1 - Activo WHERE id_usuario=%s", (sel["id_usuario"],))
-                    cx.commit(); cur.close(); cx.close()
-                    st.rerun()
+                    error_cupo = None
+                    if sel["Estado"] == "Inactivo":  # al reactivar se vuelve a revisar el cupo de la tienda
+                        cur.execute("SELECT id_rol, id_tienda FROM Usuario WHERE id_usuario=%s", (sel["id_usuario"],))
+                        id_rol_u, id_tienda_u = cur.fetchone()
+                        error_cupo = revisar_cupo(cur, id_rol_u, id_tienda_u, excluir_usuario=sel["id_usuario"])
+                    if error_cupo:
+                        st.error(error_cupo)
+                    else:
+                        cur.execute("UPDATE Usuario SET Activo = 1 - Activo WHERE id_usuario=%s", (sel["id_usuario"],))
+                        cx.commit()
+                    cur.close(); cx.close()
+                    if not error_cupo:
+                        st.rerun()
         with c2:
             nueva = st.text_input("Nueva contraseña", type="password", key="reset_pw")
             if st.button("🔑 Restablecer contraseña"):
