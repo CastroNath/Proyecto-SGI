@@ -13,7 +13,8 @@ def obtener_clientes(solo_tiendas, id_tienda=None):
                          "ORDER BY Nombre")
     # Cada tienda factura solo a los clientes que ella registró
     return consultar("""SELECT id_cliente, Nombre, NIT, NRC FROM Cliente
-                        WHERE Tipo = 'Publico general' AND id_tienda_registro = %s ORDER BY Nombre""", (id_tienda,))
+                        WHERE Tipo = 'Publico general' AND id_tienda_registro = %s AND NRC IS NOT NULL
+                        ORDER BY Nombre""", (id_tienda,))
 
 
 def obtener_productos_disponibles(id_tienda, solo_autorizados_cd=False):
@@ -54,19 +55,19 @@ def mostrar_ventas():
                                disabled=len(carrito) > 0)
             id_cliente = sel["id_cliente"] if sel else None
         else:
-            factura = st.checkbox("🧾 El cliente requiere factura con nombre", key=f"fact_{r}",
+            factura = st.checkbox("🧾 El cliente requiere Crédito Fiscal", key=f"fact_{r}",
                                   disabled=len(carrito) > 0)
             if factura:
                 clientes = obtener_clientes(solo_tiendas=False, id_tienda=id_tienda)
                 sel = st.selectbox("Cliente", [None] + clientes, key=f"cli_{clave}_{r}",
                                    format_func=lambda x: "-- Selecciona un cliente --" if x is None else
-                                   x["Nombre"] + (f" · Crédito fiscal · NRC {x['NRC']}" if x["NRC"] else ""),
+                                   f"{x['Nombre']} · NRC {x['NRC']}",
                                    disabled=len(carrito) > 0)
                 id_cliente = sel["id_cliente"] if sel else None
                 if sel and sel["NRC"]:
                     st.caption(f"🧾 Comprobante de Crédito Fiscal · NIT {sel['NIT']} · NRC {sel['NRC']}")
                 if not clientes:
-                    st.caption("No tienes clientes registrados; regístralos en Catálogos y Registros → Clientes.")
+                    st.caption("No tienes clientes de crédito fiscal registrados; regístralos en Catálogos y Registros → Clientes.")
             else:
                 st.caption("⚡ Venta rápida: se registra como **Consumidor final**.")
                 id_cliente = 1
