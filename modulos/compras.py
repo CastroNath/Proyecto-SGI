@@ -288,8 +288,7 @@ def mostrar_compras():
             if not despachos:
                 st.info("✅ No tienes despachos pendientes del Centro de Distribución.")
             else:
-                tabla(despachos, width="stretch", hide_index=True,
-                             column_config={"Total": st.column_config.NumberColumn(format="dollar")})
+                tabla(despachos, width="stretch", hide_index=True)
                 sel = st.selectbox("Despacho recibido", despachos,
                                    format_func=lambda x: f"Despacho CD #{x['id_venta']} - ${float(x['Total']):.2f}")
                 tabla(consultar("""SELECT p.Nombre AS Producto, dv.Cantidad, dv.Precio_unitario,
@@ -316,8 +315,7 @@ def mostrar_compras():
         if not ordenes:
             st.info("✅ No hay órdenes en tránsito de proveedores externos.")
         else:
-            tabla(ordenes, width="stretch", hide_index=True,
-                         column_config={"Total": st.column_config.NumberColumn(format="dollar")})
+            tabla(ordenes, width="stretch", hide_index=True)
             sel = st.selectbox("Orden", ordenes,
                                format_func=lambda x: f"Orden #{x['id_compra']} - {x['Proveedor']} (${float(x['Total']):.2f})")
             c1, c2 = st.columns(2)
@@ -346,8 +344,7 @@ def mostrar_compras():
                                    c.id_venta_origen AS Despacho_CD
                             FROM Compra c JOIN Proveedor p ON p.id_proveedor = c.id_proveedor
                             WHERE c.id_tienda = %s ORDER BY c.Fecha DESC LIMIT 200""", (id_tienda,))
-        tabla(hist, width="stretch", hide_index=True,
-                     column_config={"Total": st.column_config.NumberColumn(format="dollar")})
+        tabla(hist, width="stretch", hide_index=True)
         if hist:
             sel = st.selectbox("Ver detalle de la compra", hist, format_func=lambda x: f"Compra #{x['id_compra']}")
             tabla(consultar("""SELECT p.Nombre AS Producto, dc.Cantidad, dc.Precio_compra,
