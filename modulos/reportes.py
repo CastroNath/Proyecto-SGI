@@ -9,7 +9,7 @@ from config.conexion import consultar
 from modulos.inventario import selector_tienda
 from modulos.formato import tabla
 
-DINERO = st.column_config.NumberColumn(format="$%.2f")
+DINERO = st.column_config.NumberColumn(format="dollar")
 
 
 def _df(sql, params=()):
@@ -108,7 +108,7 @@ def mostrar_reportes():
                           WHERE DATE(v.Fecha) BETWEEN %s AND %s {ft}
                           GROUP BY p.id_producto, p.Nombre, c.Nombre ORDER BY Ingreso DESC""", (desde, hasta) + pt)
             st.subheader("Comportamiento de productos")
-            tabla(top, width="stretch", hide_index=True, column_config={"Ingreso": DINERO})
+            tabla(top, width="stretch", hide_index=True)
             sin_mov = _df(f"""SELECT t.Nombre AS Tienda, p.Nombre AS Producto, i.Existencia
                               FROM Inventario i JOIN Producto p ON p.id_producto = i.id_producto
                               JOIN Tienda t ON t.id_tienda = i.id_tienda
@@ -133,10 +133,9 @@ def mostrar_reportes():
         else:
             resumen = mov.groupby("Tipo").agg(Lineas=("Cantidad", "size"), Unidades=("Cantidad", "sum"),
                                               Importe=("Importe", "sum")).reset_index()
-            tabla(resumen, width="stretch", hide_index=True, column_config={"Importe": DINERO})
+            tabla(resumen, width="stretch", hide_index=True)
             tipos = st.multiselect("Tipo de movimiento", sorted(mov["Tipo"].unique()), default=sorted(mov["Tipo"].unique()))
-            tabla(mov[mov["Tipo"].isin(tipos)], width="stretch", hide_index=True,
-                         column_config={"Precio": DINERO, "Importe": DINERO})
+            tabla(mov[mov["Tipo"].isin(tipos)], width="stretch", hide_index=True)
 
     # -----------------------------------------------------------------
     with t4:
@@ -150,8 +149,7 @@ def mostrar_reportes():
                              (SELECT COUNT(*) FROM v_inventario vi WHERE vi.id_tienda = t.id_tienda
                                       AND vi.Estado_stock <> 'OK') AS Productos_a_reponer
                       FROM Tienda t ORDER BY t.Tipo = 'CD' DESC, t.Nombre""", (desde, hasta, desde, hasta))
-        tabla(comp, width="stretch", hide_index=True,
-                     column_config={"Ventas": DINERO, "Compras": DINERO, "Valor_inventario": DINERO})
+        tabla(comp, width="stretch", hide_index=True)
         if not comp.empty:
             st.bar_chart(comp.set_index("Tienda")[["Ventas", "Compras"]])
 
@@ -168,5 +166,4 @@ def mostrar_reportes():
             ev["Ahorro_tienda_por_unidad"] = (ev["Mejor_precio_externo"] - ev["Precio_CD"]).round(2)
             ev["Margen_CD_por_unidad"] = (ev["Precio_CD"] - ev["Costo_CD"]).round(2)
             ev["CD_autorizado"] = ev["CD_autorizado"].map({1: "✅ Sí", 0: "❌ No"})
-            tabla(ev, width="stretch", hide_index=True,
-                         column_config={"Margen_CD_por_unidad": DINERO})
+            tabla(ev, width="stretch", hide_index=True)
