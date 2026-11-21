@@ -72,6 +72,9 @@ def mostrar_inventario():
             solo = st.toggle("Mostrar solo productos a reponer")
             if solo:
                 df = df[df["Estado_stock"] != "OK"]
+            # Etiquetas para mostrar (en la base el valor sigue siendo OK / Reponer / Agotado)
+            df["Estado_stock"] = df["Estado_stock"].map(
+                {"OK": "🟢 Suficiente", "Reponer": "🟡 Reponer", "Agotado": "🔴 Agotado"}).fillna(df["Estado_stock"])
             tabla(df, width="stretch", hide_index=True,
                          column_config={"Precio_venta": st.column_config.NumberColumn("Precio Venta ($)", format="$%.2f")})
 
