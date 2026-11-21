@@ -52,6 +52,11 @@ def transaccion():
 # 1.0 Gestión de usuarios y acceso
 # =====================================================================
 def hash_password(password, iteraciones=120_000):
+    """Las contraseñas se guardan tal cual (visibles en phpMyAdmin), por decisión del equipo."""
+    return password
+
+
+def _hash_pbkdf2(password, iteraciones=120_000):
     salt = os.urandom(16).hex()
     h = hashlib.pbkdf2_hmac("sha256", password.encode(), bytes.fromhex(salt), iteraciones).hex()
     return f"pbkdf2${iteraciones}${salt}${h}"
@@ -81,10 +86,10 @@ def autenticar(usuario, password):
             raise ReglaNegocioError("Usuario o contraseña incorrectos.")
         if not u["Activo"]:
             raise ReglaNegocioError("Este usuario está desactivado. Contacte al administrador.")
-        if not u["Contrasena"].startswith("pbkdf2$"):
-            # Migración transparente: la contraseña en texto plano se reemplaza por su hash
+        if u["Contrasena"].startswith("pbkdf2$"):
+            # Las contraseñas codificadas antes vuelven a guardarse visibles al iniciar sesión
             cur.execute("UPDATE Usuario SET Contrasena=%s WHERE id_usuario=%s",
-                        (hash_password(password), u["id_usuario"]))
+                        (password, u["id_usuario"]))
         u.pop("Contrasena")
         return u
 
@@ -220,13 +225,24 @@ def registrar_compra(id_tienda, id_proveedor, id_usuario, items, recibida=False,
                      it.get("precio_venta"), it.get("fecha_venc") or None))
         if it.get("stock_minimo") is not None:
             # Deja preparado el punto de reorden calculado (la existencia sube al recibir)
-            cur.execute("""INSERT INTO Inventario (id_tienda, id_producto, Existencia, Stock_minimo, Precio_venta)
-                           VALUES (%s,%s,0,%s,%s)
-                           ON DUPLICATE KEY UPDATE Stock_minimo = VALUES(Stock_minimo)""",
-                        (id_tienda, it["id_producto"], it["stock_minimo"], it.get("precio_venta") or 0))
+            if _fila_inventario(cur, id_tienda, it["id_producto"]):
+                cur.execute("UPDATE Inventario SET Stock_minimo=%s WHERE id_tienda=%s AND id_producto=%s",
+                            (it["stock_minimo"], id_tienda, it["id_producto"]))
+            else:
+                cur.execute("""INSERT INTO Inventario (id_tienda, id_producto, Existencia, Stock_minimo, Precio_venta)
+                               VALUES (%s,%s,0,%s,%s)""",
+                            (id_tienda, it["id_producto"], it["stock_minimo"], it.get("precio_venta") or 0))
     if recibida:
         _aplicar_recepcion(cur, id_compra, fecha)
     return id_compra
+
+
+def _fila_inventario(cur, id_tienda, id_producto):
+    """¿Ya existe la fila de inventario? Se consulta antes de insertar para no gastar números de
+    AUTO_INCREMENT (INSERT ... ON DUPLICATE KEY UPDATE consume un ID aunque solo actualice)."""
+    cur.execute("SELECT id_inventario FROM Inventario WHERE id_tienda=%s AND id_producto=%s FOR UPDATE",
+                (id_tienda, id_producto))
+    return cur.fetchone() is not None
 
 
 def _aplicar_recepcion(cur, id_compra, fecha):
@@ -240,11 +256,15 @@ def _aplicar_recepcion(cur, id_compra, fecha):
         if dc["id_producto"] is None:
             raise ReglaNegocioError(f"La compra #{id_compra} tiene líneas sin producto (registro antiguo).")
         sugerido = dc["Precio_venta_sugerido"]
-        cur.execute("""INSERT INTO Inventario (id_tienda, id_producto, Existencia, Stock_minimo, Precio_venta)
-                       VALUES (%s,%s,%s,5,%s)
-                       ON DUPLICATE KEY UPDATE Existencia = Existencia + VALUES(Existencia),
-                           Precio_venta = IF(%s IS NULL, Precio_venta, %s)""",
-                    (compra["id_tienda"], dc["id_producto"], int(dc["Cantidad"]), sugerido or 0, sugerido, sugerido))
+        if _fila_inventario(cur, compra["id_tienda"], dc["id_producto"]):
+            cur.execute("""UPDATE Inventario SET Existencia = Existencia + %s,
+                                  Precio_venta = IF(%s IS NULL, Precio_venta, %s)
+                           WHERE id_tienda=%s AND id_producto=%s""",
+                        (int(dc["Cantidad"]), sugerido, sugerido, compra["id_tienda"], dc["id_producto"]))
+        else:
+            cur.execute("""INSERT INTO Inventario (id_tienda, id_producto, Existencia, Stock_minimo, Precio_venta)
+                           VALUES (%s,%s,%s,5,%s)""",
+                        (compra["id_tienda"], dc["id_producto"], int(dc["Cantidad"]), sugerido or 0))
         cur.execute("INSERT INTO Lote (id_detalle_compra, Fecha_vencimiento, Cantidad_disponible) VALUES (%s,%s,%s)",
                     (dc["id_detalle_compra"], dc["Fecha_vencimiento"], dc["Cantidad"]))
         if comprador_es_cd:
