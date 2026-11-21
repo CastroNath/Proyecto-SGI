@@ -242,7 +242,9 @@ def mostrar_clientes():
         if es_admin:
             st.subheader("Clientes registrados por las tiendas")
             tabla(consultar("""SELECT c.id_cliente AS ID, t.Nombre AS Tienda, c.Nombre,
-                                      IFNULL(c.NIT, '') AS NIT, IFNULL(c.NRC, '') AS NRC,
+                                      CASE WHEN c.NIT IS NULL THEN ''
+                                        WHEN CHAR_LENGTH(c.NIT) = 10 THEN CONCAT('DUI ', c.NIT)
+                                        ELSE CONCAT('NIT ', c.NIT) END AS `DUI / NIT`, IFNULL(c.NRC, '') AS NRC,
                                       IF(c.NRC IS NULL, 'Consumidor final', 'Crédito fiscal') AS Comprobante
                                FROM Cliente c JOIN Tienda t ON t.id_tienda = c.id_tienda_registro
                                WHERE c.Tipo = 'Publico general' ORDER BY t.Nombre, c.Nombre"""))
@@ -263,7 +265,10 @@ def mostrar_clientes():
 def _lista_clientes(id_tienda):
     clientes = consultar("""SELECT id_cliente AS ID, Nombre,
                                    IF(NRC IS NULL, '⚠️ Faltan datos fiscales', '') AS Pendiente,
-                                   IFNULL(NIT, '') AS NIT, IFNULL(NRC, '') AS NRC, IFNULL(Giro, '') AS Giro,
+                                   CASE WHEN NIT IS NULL THEN ''
+                                        WHEN CHAR_LENGTH(NIT) = 10 THEN CONCAT('DUI ', NIT)
+                                        ELSE CONCAT('NIT ', NIT) END AS `DUI / NIT`,
+                                   IFNULL(NRC, '') AS NRC, IFNULL(Giro, '') AS Giro,
                                    IFNULL(Direccion, '') AS `Dirección`, IFNULL(Telefono, '') AS `Teléfono`,
                                    IFNULL(Correo, '') AS Correo
                             FROM Cliente
@@ -273,4 +278,8 @@ def _lista_clientes(id_tienda):
         st.info("Aún no has registrado clientes de crédito fiscal. Las ventas sin cliente se registran como "
                 "consumidor final.")
     else:
+        # La columna «Pendiente» solo se muestra si algún cliente tiene datos fiscales incompletos
+        if not any(c["Pendiente"] for c in clientes):
+            for c in clientes:
+                c.pop("Pendiente")
         tabla(clientes)
