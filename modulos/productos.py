@@ -87,6 +87,18 @@ def mostrar_productos():
             st.warning("📭 Aún no hay productos registrados en el catálogo.")
         return
 
+    # El cajero solo consulta el catálogo; registrar productos es tarea del encargado o administrador
+    if st.session_state.get("id_rol") not in (1, 2):
+        st.info("🔎 Como cajero puedes consultar el catálogo. Para registrar un producto nuevo, "
+                "pídeselo al encargado de tu tienda.")
+        catalogo = obtener_catalogo_completo()
+        if catalogo:
+            st.subheader("Productos Registrados en la Red")
+            tabla(catalogo, width="stretch", hide_index=True)
+        else:
+            st.warning("📭 Aún no hay productos registrados en el catálogo.")
+        return
+
     # Si pertenece a una Tienda Minorista, permitir registrar y consultar
     tab1, tab2 = st.tabs(["➕ Registrar Nuevo Producto", "📋 Consultar Catálogo Global"])
 
