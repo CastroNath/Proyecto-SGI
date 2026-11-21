@@ -212,7 +212,10 @@ def mostrar_compras():
             elif any(i["id_producto"] == prod_sel["id_producto"] for i in carrito):
                 st.warning("⚠️ Ese producto ya está en la orden; elimínalo para cambiar la cantidad.")
             elif al_cd and not (info_cd and info_cd["CD_autorizado"]):
-                st.error("❌ El Centro de Distribución no ofrece este producto en este momento.")
+                mejor = next((c["Proveedor"] for c in (comp or []) if not c["Proveedor"].startswith("🏢")), None)
+                st.error("❌ El Centro de Distribución no puede venderte este producto porque no es la opción "
+                         "más barata. " + (f"Cambia el proveedor a **{mejor}** para comprarlo."
+                                           if mejor else "Cómpralo a un proveedor externo."))
             elif al_cd and (info_cd["Existencia"] or 0) < cantidad:
                 st.error(f"❌ El CD solo tiene {info_cd['Existencia'] or 0} unidades de este producto.")
             elif precio_compra <= 0:
