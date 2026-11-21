@@ -29,12 +29,95 @@ def registrar_usuario(id_rol, id_tienda, nombre, usuario, contrasena):
         conexion.close()
 
 
+def crear_tienda(nombre, direccion):
+    """Registra una tienda nueva que se une a la cooperativa."""
+    if consultar("SELECT 1 FROM Tienda WHERE LOWER(TRIM(Nombre)) = LOWER(%s)", (nombre,)):
+        return False, f"❌ Ya existe una tienda llamada «{nombre}»."
+    cx = obtener_conexion()
+    if cx is None:
+        return False, "No hay conexión con la base de datos."
+    cur = cx.cursor()
+    try:
+        cur.execute("INSERT INTO Tienda (Nombre, Tipo, Direccion) VALUES (%s, 'Tienda', %s)", (nombre, direccion))
+        cx.commit()
+        return True, (f"✅ Tienda «{nombre}» creada. Siguientes pasos: asígnale usuarios en la pestaña «Crear cuenta», "
+                      "y el Centro de Distribución la registra como cliente en Catálogos y Registros → Clientes.")
+    except Exception as e:
+        cx.rollback()
+        return False, f"❌ Error al crear la tienda: {e}"
+    finally:
+        cur.close()
+        cx.close()
+
+
+def gestionar_tiendas():
+    if st.session_state.get("msg_tienda"):
+        st.success(st.session_state.pop("msg_tienda"))
+
+    st.subheader("Tiendas de la red")
+    tabla(consultar("""SELECT t.id_tienda AS ID, t.Nombre AS Tienda,
+                              IF(t.Tipo = 'CD', 'Centro de Distribución', 'Tienda') AS Tipo,
+                              IFNULL(t.Direccion, '') AS `Dirección`,
+                              (SELECT COUNT(*) FROM Usuario u WHERE u.id_tienda = t.id_tienda) AS Usuarios,
+                              CASE WHEN t.Tipo = 'CD' THEN '—'
+                                   WHEN EXISTS (SELECT 1 FROM Cliente c WHERE c.id_tienda = t.id_tienda) THEN 'Sí'
+                                   ELSE 'Pendiente' END AS `Cliente del CD`
+                       FROM Tienda t ORDER BY t.Tipo = 'CD' DESC, t.Nombre"""))
+
+    st.subheader("➕ Nueva tienda")
+    st.caption("Cuando una tienda se une a la cooperativa, regístrala aquí. Su inventario empieza vacío y se llena "
+               "con sus primeras compras.")
+    with st.form("form_tienda", clear_on_submit=True):
+        nombre = st.text_input("Nombre de la tienda *", placeholder="Ej. Tienda Chalchuapa")
+        direccion = st.text_input("Dirección *", placeholder="Ej. 3a Calle Oriente #8, Chalchuapa")
+        guardar = st.form_submit_button("Crear tienda")
+    if guardar:
+        nombre, direccion = nombre.strip(), direccion.strip()
+        if not nombre or not direccion:
+            st.error("❌ El nombre y la dirección de la tienda son obligatorios.")
+        else:
+            ok, msg = crear_tienda(nombre, direccion)
+            if ok:
+                st.session_state["msg_tienda"] = msg
+                st.rerun()
+            st.error(msg)
+
+    st.subheader("✏️ Modificar tienda")
+    tiendas = consultar("SELECT id_tienda, Nombre, Tipo, Direccion FROM Tienda ORDER BY Nombre")
+    sel = st.selectbox("Tienda", [None] + tiendas, key="tienda_editar",
+                       format_func=lambda x: "-- Selecciona una tienda --" if x is None else x["Nombre"])
+    if sel:
+        with st.form(f"form_editar_tienda_{sel['id_tienda']}"):
+            nuevo_nombre = st.text_input("Nombre *", value=sel["Nombre"])
+            nueva_dir = st.text_input("Dirección *", value=sel["Direccion"] or "")
+            if st.form_submit_button("💾 Guardar cambios"):
+                nuevo_nombre, nueva_dir = nuevo_nombre.strip(), nueva_dir.strip()
+                if not nuevo_nombre or not nueva_dir:
+                    st.error("❌ El nombre y la dirección son obligatorios.")
+                elif consultar("SELECT 1 FROM Tienda WHERE LOWER(TRIM(Nombre)) = LOWER(%s) AND id_tienda <> %s",
+                               (nuevo_nombre, sel["id_tienda"])):
+                    st.error(f"❌ Ya existe otra tienda llamada «{nuevo_nombre}».")
+                else:
+                    cx = obtener_conexion(); cur = cx.cursor()
+                    cur.execute("UPDATE Tienda SET Nombre=%s, Direccion=%s WHERE id_tienda=%s",
+                                (nuevo_nombre, nueva_dir, sel["id_tienda"]))
+                    # El nombre del cliente que la representa ante el CD se mantiene igual al de la tienda
+                    cur.execute("UPDATE Cliente SET Nombre=%s WHERE id_tienda=%s", (nuevo_nombre, sel["id_tienda"]))
+                    cx.commit(); cur.close(); cx.close()
+                    st.session_state["msg_tienda"] = f"✅ Datos de «{nuevo_nombre}» actualizados."
+                    st.session_state.pop("tienda_editar", None)
+                    st.rerun()
+
+
 def mostrar_registro():
-    st.header("👑 Administración de Cuentas")
+    st.header("👑 Administración de Tiendas y Cuentas")
     if st.session_state.get("id_rol") != 1:
         st.error("⛔ Acceso denegado. Solo el Administrador General puede gestionar cuentas.")
         return
-    tab_nuevo, tab_lista = st.tabs(["➕ Crear cuenta", "📋 Usuarios registrados"])
+    tab_tiendas, tab_nuevo, tab_lista = st.tabs(["🏪 Tiendas", "➕ Crear cuenta", "📋 Usuarios registrados"])
+
+    with tab_tiendas:
+        gestionar_tiendas()
 
     with tab_nuevo:
         st.write("Asigna un nuevo empleado operativo a su rol y tienda correspondiente.")
