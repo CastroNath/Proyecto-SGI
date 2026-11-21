@@ -9,7 +9,6 @@ from config.conexion import consultar
 from modulos.inventario import selector_tienda
 from modulos.formato import tabla
 
-DINERO = st.column_config.NumberColumn(format="dollar")
 
 
 def _df(sql, params=()):
