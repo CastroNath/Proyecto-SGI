@@ -4,6 +4,7 @@ import mysql.connector
 import streamlit as st
 
 from config.conexion import consultar, obtener_conexion
+from modulos.catalogos import GIROS
 from modulos.formato import tabla
 
 
@@ -69,8 +70,14 @@ def _formulario_cliente(clave, actual=None):
             valores["nrc"] = c2.text_input("NRC *", value=actual.get("NRC") or "", placeholder="123456-7", max_chars=8,
                                            help="Número de Registro de Contribuyente: escribe solo los números "
                                                 "(hasta 7); el guion antes del dígito verificador se agrega solo.")
-            valores["giro"] = st.text_input("Giro o actividad económica *", value=actual.get("Giro") or "",
-                                            placeholder="Ej. Venta de comida preparada")
+            giro_actual = actual.get("Giro") or None
+            opciones_giro = GIROS if (giro_actual is None or giro_actual in GIROS) else [giro_actual] + GIROS
+            valores["giro"] = st.selectbox(
+                "Giro o actividad económica *", opciones_giro,
+                index=opciones_giro.index(giro_actual) if giro_actual else None,
+                placeholder="Escribe para buscar (ej. comida, ferretería, panadería)…",
+                accept_new_options=True,
+                help="Busca escribiendo una palabra. Si el giro no aparece, escríbelo completo y presiona Enter.") or ""
             valores["direccion"] = st.text_input("Dirección *", value=actual.get("Direccion") or "",
                                                  placeholder="Ej. Calle Libertad #10, Santa Ana")
             c3, c4 = st.columns(2)
