@@ -1,6 +1,6 @@
 import streamlit as st
 import mysql.connector
-from config.conexion import obtener_conexion
+from config.conexion import consultar_uno, obtener_conexion
 from modulos.formato import tabla
 
 def es_centro_distribucion(id_tienda):
@@ -77,14 +77,16 @@ def mostrar_productos():
     with tab1:
         if st.session_state.get("limpiar_prod", False):
             st.session_state["prod_nom"] = ""
-            st.session_state["prod_uni"] = "Unidad"
+            st.session_state["prod_uni"] = None
+            st.session_state["prod_cat"] = None
             st.session_state["limpiar_prod"] = False
 
         if st.session_state.get("ok_prod"):
             st.success(st.session_state.pop("ok_prod"))
 
         if "prod_nom" not in st.session_state: st.session_state["prod_nom"] = ""
-        if "prod_uni" not in st.session_state: st.session_state["prod_uni"] = "Unidad"
+        if "prod_uni" not in st.session_state: st.session_state["prod_uni"] = None
+        if "prod_cat" not in st.session_state: st.session_state["prod_cat"] = None
 
         categorias = obtener_categorias()
         if not categorias:
@@ -95,16 +97,27 @@ def mostrar_productos():
         st.text_input("Código de Barras (EAN-13 Automático)", value=codigo_auto, disabled=True)
         
         nombre = st.text_input("Nombre del Producto", key="prod_nom")
-        cat_sel = st.selectbox("Categoría", categorias, format_func=lambda x: x["Nombre"])
+        # Sin opción preseleccionada: se obliga a elegir conscientemente
+        nombres_cat = {c["id_categoria"]: c["Nombre"] for c in categorias}
+        id_cat = st.selectbox("Categoría", list(nombres_cat), format_func=nombres_cat.get, index=None,
+                              placeholder="-- Selecciona una categoría --", key="prod_cat")
         unidad = st.selectbox(
             "Unidad de Medida",
-            ["Unidad", "Libra", "Kilogramo", "Litro", "Mililitro", "Paquete", "Caja", "Saco"],
-            key="prod_uni"
+            ["Unidad", "Libra", "Kilogramo", "Gramo", "Onza", "Litro", "Mililitro", "Paquete", "Bolsa",
+             "Caja", "Docena", "Frasco", "Saco"],
+            index=None, placeholder="-- Selecciona una unidad de medida --", key="prod_uni"
         )
 
         if st.button("Guardar Producto", key="btn_save_prod"):
             if not nombre.strip():
                 st.warning("⚠️ El nombre del producto es obligatorio.")
+            elif id_cat is None:
+                st.warning("⚠️ Selecciona la categoría del producto.")
+            elif unidad is None:
+                st.warning("⚠️ Selecciona la unidad de medida.")
+            elif consultar_uno("SELECT 1 AS x FROM Producto WHERE LOWER(TRIM(Nombre)) = LOWER(%s) AND Unidad_medida = %s",
+                               (nombre.strip(), unidad)):
+                st.warning(f"⚠️ Ya existe «{nombre.strip()}» ({unidad}) en el catálogo.")
             else:
                 cx = obtener_conexion()
                 if cx:
@@ -112,7 +125,7 @@ def mostrar_productos():
                         cur = cx.cursor()
                         cur.execute(
                             "INSERT INTO Producto (id_categoria, Nombre, Unidad_medida, Codigo_barras) VALUES (%s, %s, %s, %s)",
-                            (cat_sel["id_categoria"], nombre.strip(), unidad, codigo_auto)
+                            (id_cat, nombre.strip(), unidad, codigo_auto)
                         )
                         cx.commit()
                         st.session_state["ok_prod"] = f"✅ Producto '{nombre.strip()}' registrado con código {codigo_auto}."
