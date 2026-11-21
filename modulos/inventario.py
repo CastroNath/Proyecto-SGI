@@ -5,11 +5,34 @@ import streamlit as st
 
 from config.conexion import consultar, obtener_conexion
 from modulos.negocio import ReglaNegocioError, baja_manual, dar_baja_vencidos
-from modulos.formato import tabla
+from modulos.formato import tabla, _texto
 
 
 DIAS_DEMANDA = 30
 LEAD_TIME_DEFECTO = 3
+DIAS_POR_VENCER = 3   # lotes que vencen en estos días o menos se marcan "Por vencer"
+
+
+def estado_vencimiento(dias):
+    if dias is None:
+        return "Sin vencimiento"
+    if dias < 0:
+        return "🔴 Vencido"
+    if dias <= DIAS_POR_VENCER:
+        return "🟡 Por vencer"
+    if dias <= 30:
+        return "🔵 Próximo"
+    return "🟢 Vigente"
+
+
+def lotes_por_vencer(id_tienda, id_producto=None):
+    """Lotes con unidades disponibles que vencen en los próximos DIAS_POR_VENCER días (sin contar vencidos)."""
+    filtro, params = ("AND id_producto = %s", (id_tienda, DIAS_POR_VENCER, id_producto)) if id_producto \
+        else ("", (id_tienda, DIAS_POR_VENCER))
+    return consultar(f"""SELECT Producto, Fecha_vencimiento, Dias_para_vencer, Cantidad_disponible FROM v_lotes
+                         WHERE id_tienda = %s AND Cantidad_disponible > 0
+                           AND Dias_para_vencer BETWEEN 0 AND %s {filtro}
+                         ORDER BY Fecha_vencimiento""", params)
 
 
 def sugerencias_stock_minimo(id_tienda):
@@ -17,7 +40,7 @@ def sugerencias_stock_minimo(id_tienda):
     Demanda diaria: unidades vendidas en la tienda en los últimos DIAS_DEMANDA días ÷ DIAS_DEMANDA.
     Lead time: días promedio entre el pedido y la recepción de ese producto en la tienda."""
     filas = consultar(f"""
-        SELECT i.id_inventario, p.Nombre, p.Unidad_medida, i.Existencia, i.Stock_minimo, i.Precio_venta,
+        SELECT i.id_inventario, i.id_producto, p.Nombre, p.Unidad_medida, i.Existencia, i.Stock_minimo, i.Precio_venta,
                COALESCE((SELECT SUM(dv.Cantidad) FROM Venta v JOIN Detalle_venta dv ON dv.id_venta = v.id_venta
                          WHERE v.id_tienda = i.id_tienda AND dv.id_producto = i.id_producto
                            AND v.Fecha >= NOW() - INTERVAL {DIAS_DEMANDA} DAY), 0) AS Vendido,
@@ -82,17 +105,32 @@ def mostrar_inventario():
         id_t = selector_tienda("venc_t")
         dias = st.slider("Mostrar lotes que vencen en los próximos (días)", 7, 120, 30)
         f, p = ("AND id_tienda = %s", (dias, id_t)) if id_t else ("", (dias,))
-        lotes = consultar(f"""SELECT Tienda, Producto, Fecha_vencimiento, Dias_para_vencer, Cantidad_disponible,
-                                     Estado_lote FROM v_lotes
-                              WHERE Fecha_vencimiento IS NOT NULL AND Dias_para_vencer <= %s {f}
+        lotes = consultar(f"""SELECT Tienda, Producto, Fecha_vencimiento, Dias_para_vencer, Cantidad_disponible
+                              FROM v_lotes
+                              WHERE Fecha_vencimiento IS NOT NULL AND Cantidad_disponible > 0
+                                AND Dias_para_vencer <= %s {f}
                               ORDER BY Fecha_vencimiento""", p)
         if not lotes:
             st.success("✅ No hay lotes vencidos ni próximos a vencer en ese plazo.")
         else:
-            vencidos = sum(1 for l in lotes if l["Estado_lote"] == "Vencido")
+            for l in lotes:
+                l["Estado"] = estado_vencimiento(l["Dias_para_vencer"])
+            vencidos = [l for l in lotes if l["Dias_para_vencer"] < 0]
+            por_vencer = [l for l in lotes if 0 <= l["Dias_para_vencer"] <= DIAS_POR_VENCER]
             if vencidos:
-                st.error(f"⛔ {vencidos} lote(s) vencido(s): no se pueden vender y deben darse de baja.")
-            tabla(lotes, width="stretch", hide_index=True)
+                st.error(f"⛔ {len(vencidos)} lote(s) vencido(s): no se pueden vender y deben darse de baja "
+                         "en la pestaña Ajustes.")
+            if por_vencer:
+                lista = ", ".join(f"**{l['Producto']}** ({_texto(l['Cantidad_disponible'], False)} u., "
+                                  + ("vence hoy" if l["Dias_para_vencer"] == 0 else
+                                     f"vence en {l['Dias_para_vencer']} día" + ("s" if l["Dias_para_vencer"] > 1 else ""))
+                                  + ")" for l in por_vencer)
+                st.warning(f"🟡 Por vencer en {DIAS_POR_VENCER} días o menos: {lista}. "
+                           "Considera bajar su precio en Ajustes para venderlos antes de que se venzan.")
+            tabla(lotes, width="stretch", hide_index=True,
+                  column_config={"Dias_para_vencer": st.column_config.TextColumn("Días para vencer", alignment="right"),
+                                 "Cantidad_disponible": st.column_config.TextColumn("Cantidad disponible",
+                                                                                    alignment="right")})
 
     with t_ajuste:
         if not puede_editar:
@@ -135,6 +173,11 @@ def mostrar_inventario():
                 actual_min, actual_precio = int(sel["Stock_minimo"]), float(sel["Precio_venta"])
                 st.caption(f"Actual: existencia **{sel['Existencia']}** · stock mínimo **{actual_min}** · "
                            f"precio **\\${actual_precio:.2f}**")
+                for l in lotes_por_vencer(id_t, sel["id_producto"]):
+                    cuando = "hoy" if l["Dias_para_vencer"] == 0 else \
+                        f"en {l['Dias_para_vencer']} día" + ("s" if l["Dias_para_vencer"] > 1 else "")
+                    st.warning(f"🟡 {_texto(l['Cantidad_disponible'], False)} unidades de este producto vencen {cuando} "
+                               f"({l['Fecha_vencimiento']}). Puedes bajar el precio para venderlas antes.")
                 if sel["Sugerido"] is None:
                     st.caption(f"Sin ventas en los últimos {DIAS_DEMANDA} días: no hay datos para calcularlo; "
                                "se mantiene el valor actual.")
