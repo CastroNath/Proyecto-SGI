@@ -161,9 +161,10 @@ def mostrar_ventas():
         else:
             st.caption(f"{len(ventas)} ventas · \\${sum(float(v['Total']) for v in ventas):,.2f}")
             tabla(ventas, width="stretch", hide_index=True)
-            sel = st.selectbox("Ver detalle", ventas, format_func=lambda x: f"Venta #{x['ID']}")
-            tabla(consultar("""SELECT p.Nombre AS Producto, dv.Cantidad, dv.Precio_unitario,
-                                             dv.Cantidad * dv.Precio_unitario AS Subtotal
-                                      FROM Detalle_venta dv JOIN Producto p ON p.id_producto = dv.id_producto
-                                      WHERE dv.id_venta = %s""", (sel["ID"],)),
-                         width="stretch", hide_index=True)
+            sel = st.selectbox("Ver detalle", ventas, index=None, placeholder="Selecciona una venta",
+                               format_func=lambda x: f"Venta #{x['ID']}")
+            if sel is not None:
+                tabla(consultar("""SELECT p.Nombre AS Producto, dv.Cantidad, dv.Precio_unitario,
+                                          dv.Cantidad * dv.Precio_unitario AS Subtotal
+                                   FROM Detalle_venta dv JOIN Producto p ON p.id_producto = dv.id_producto
+                                   WHERE dv.id_venta = %s""", (sel["ID"],)))
