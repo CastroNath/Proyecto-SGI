@@ -132,15 +132,15 @@ def mostrar_registro():
             with st.form("form_registro", clear_on_submit=True):
                 nombre = st.text_input("Nombre Completo del Empleado")
                 usuario = st.text_input("Nombre de Usuario")
-                contrasena = st.text_input("Contraseña (mínimo 6 caracteres)", type="password")
+                contrasena = st.text_input("Contraseña (mínimo 4 caracteres)", type="password")
                 rol_sel = st.selectbox("Asignar Rol", roles, format_func=lambda x: x["Nombre"])
                 tienda_sel = st.selectbox("Asignar Tienda / Sucursal", tiendas, format_func=lambda x: x["Nombre"])
                 guardar = st.form_submit_button("Guardar Usuario")
             if guardar:
                 if not nombre.strip() or not usuario.strip() or not contrasena.strip():
                     st.error("⚠️ Por favor, llena todos los campos.")
-                elif len(contrasena) < 6:
-                    st.error("⚠️ La contraseña debe tener al menos 6 caracteres.")
+                elif len(contrasena) < 4:
+                    st.error("⚠️ La contraseña debe tener al menos 4 caracteres.")
                 else:
                     ok, msg = registrar_usuario(rol_sel["id_rol"], tienda_sel["id_tienda"],
                                                 nombre.strip(), usuario.strip(), contrasena)
@@ -169,8 +169,8 @@ def mostrar_registro():
         with c2:
             nueva = st.text_input("Nueva contraseña", type="password", key="reset_pw")
             if st.button("🔑 Restablecer contraseña"):
-                if len(nueva) < 6:
-                    st.error("La contraseña debe tener al menos 6 caracteres.")
+                if len(nueva) < 4:
+                    st.error("La contraseña debe tener al menos 4 caracteres.")
                 else:
                     cx = obtener_conexion(); cur = cx.cursor()
                     cur.execute("UPDATE Usuario SET Contrasena=%s WHERE id_usuario=%s",
