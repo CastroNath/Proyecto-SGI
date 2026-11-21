@@ -59,31 +59,47 @@ def sin_vencimiento(filas):
 
 
 def aviso_catalogo(prov_sel, prod_sel, comp, info_cd, orden_en_curso=False):
-    """Avisa si el proveedor elegido no tiene el producto en su catálogo y dice quién sí lo tiene."""
+    """Avisa si el proveedor elegido no vende el producto o no es el más barato, y dice quién sí conviene."""
     if not (prov_sel and prod_sel):
         return
-    if prov_sel["id_tienda_cd"]:
+    al_cd = bool(prov_sel["id_tienda_cd"])
+    if al_cd:
         tiene = bool(info_cd and info_cd["Precio_CD"] and (info_cd["Existencia"] or 0) > 0)
+        precio = float(info_cd["Precio_CD"]) if tiene else None
+        conviene = bool(info_cd and info_cd["CD_autorizado"])
     else:
-        tiene = precio_lista(prod_sel["id_producto"], prov_sel["id_proveedor"]) is not None
+        lista = precio_lista(prod_sel["id_producto"], prov_sel["id_proveedor"])
+        tiene = lista is not None
+        precio = float(lista) if tiene else None
+        conviene = True
+    nombre_prov = "El Centro de Distribución" if al_cd else f"**{prov_sel['Nombre']}**"
+    producto = f"**{prod_sel['Nombre']}**"
+    mejor = comp[0] if comp else None
+    mejor_txt = None
+    if mejor:
+        quien = ("el **Centro de Distribución**" if mejor["Proveedor"].startswith("🏢")
+                 else f"**{mejor['Proveedor']}**")
+        mejor_txt = f"{quien} (\\${float(mejor['Precio']):.2f})"
+
+    if orden_en_curso:
+        # El proveedor ya quedó fijo en esta orden: un solo aviso corto
+        cambiar = " Para cambiar de proveedor, termina esta compra y realiza una nueva."
+        if not tiene:
+            msg = f"⚠️ {nombre_prov} no vende {producto}." + (f" El más barato es {mejor_txt}." if mejor_txt else "")
+            st.warning(msg + cambiar)
+        elif not conviene or (mejor and precio > float(mejor["Precio"])):
+            st.warning(f"⚠️ {nombre_prov} no es la opción más barata para {producto}: "
+                       f"el más barato es {mejor_txt}." + cambiar)
+        return
+
     if tiene:
         return
     otros = [f"**{f['Proveedor'].replace('🏢 ', '')}** (\\${float(f['Precio']):.2f})" for f in comp]
-    nombre_prov = "El Centro de Distribución" if prov_sel["id_tienda_cd"] else f"**{prov_sel['Nombre']}**"
-    msg = f"⚠️ {nombre_prov} no tiene **{prod_sel['Nombre']}** en su catálogo."
-    if otros and orden_en_curso:
-        # La orden ya tiene productos y el proveedor quedó fijo: no se puede cambiar aquí
-        msg += (" Lo venden: " + ", ".join(otros) + ". Como cada orden de compra es para un solo proveedor, "
-                "primero termina esta orden con "
-                + ("el Centro de Distribución" if prov_sel["id_tienda_cd"] else nombre_prov)
-                + " y guárdala con el botón **Confirmar Orden de Compra**; después crea una orden nueva "
-                "con el otro proveedor para comprar este producto.")
-        if not prov_sel["id_tienda_cd"]:
-            msg += " Si este proveedor sí te lo vende, escribe el precio acordado y quedará en su catálogo."
-    elif otros:
+    msg = f"⚠️ {nombre_prov} no tiene {producto} en su catálogo."
+    if otros:
         msg += " Lo venden: " + ", ".join(otros) + ". Para comprarlo, cambia de proveedor"
-        msg += "." if not prov_sel["id_tienda_cd"] else " (elige un proveedor externo)."
-        if not prov_sel["id_tienda_cd"]:
+        msg += "." if not al_cd else " (elige un proveedor externo)."
+        if not al_cd:
             msg += " Si este proveedor sí te lo vende, escribe el precio acordado y quedará en su catálogo."
     else:
         msg += " Ningún proveedor lo tiene registrado todavía; escribe el precio acordado."
@@ -234,9 +250,7 @@ def mostrar_compras():
                 mejor = next((c["Proveedor"] for c in (comp or []) if not c["Proveedor"].startswith("🏢")), None)
                 if carrito:
                     st.error("❌ El Centro de Distribución no puede venderte este producto porque no es la opción "
-                             "más barata. Primero termina esta orden con el CD y guárdala con el botón **Confirmar Orden "
-                             "de Compra**; después crea una orden nueva con " + (f"**{mejor}**" if mejor else "un proveedor externo") +
-                             " para comprar este producto.")
+                             "más barata. Para cambiar de proveedor, termina esta compra y realiza una nueva.")
                 else:
                     st.error("❌ El Centro de Distribución no puede venderte este producto porque no es la opción "
                              "más barata. " + (f"Cambia el proveedor a **{mejor}** para comprarlo."
