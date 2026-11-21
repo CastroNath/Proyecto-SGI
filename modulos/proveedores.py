@@ -102,6 +102,17 @@ def lista_de_precios():
 
 def mostrar_proveedores():
     st.header("🚚 Gestión de Proveedores")
+    # El cajero solo consulta el directorio; registrar, editar y poner precios es del encargado o administrador
+    if st.session_state.get("id_rol") not in (1, 2):
+        st.info("🔎 Como cajero puedes consultar el directorio de proveedores. Registrar o editar "
+                "proveedores y sus precios le corresponde al encargado de tu tienda.")
+        provs = consultar("""SELECT Nombre, Tipo, DUI_NIT AS `DUI / NIT`, Telefono AS Teléfono
+                             FROM Proveedor WHERE id_tienda_cd IS NULL ORDER BY Nombre""")
+        if provs:
+            tabla(provs)
+        else:
+            st.info("📭 No hay proveedores registrados.")
+        return
     tab1, tab2, tab3 = st.tabs(["➕ Registrar Nuevo Proveedor", "📋 Directorio y Edición", "💲 Lista de precios"])
 
     with tab3:
