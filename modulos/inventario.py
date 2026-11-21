@@ -168,43 +168,47 @@ def mostrar_inventario():
                         st.write("Todos los productos con ventas ya tienen su stock mínimo al día.")
 
                 # Fuera del formulario para que, al cambiar de producto, se carguen sus valores
-                sel = st.selectbox("Producto", inv, key="param_prod",
+                sel = st.selectbox("Producto", inv, key="param_prod", index=None,
+                                   placeholder="Selecciona un producto",
                                    format_func=lambda x: f"{x['Nombre']} ({x['Unidad_medida']})")
-                actual_min, actual_precio = int(sel["Stock_minimo"]), float(sel["Precio_venta"])
-                st.caption(f"Actual: existencia **{sel['Existencia']}** · stock mínimo **{actual_min}** · "
-                           f"precio **\\${actual_precio:.2f}**")
-                for l in lotes_por_vencer(id_t, sel["id_producto"]):
-                    cuando = "hoy" if l["Dias_para_vencer"] == 0 else \
-                        f"en {l['Dias_para_vencer']} día" + ("s" if l["Dias_para_vencer"] > 1 else "")
-                    st.warning(f"🟡 {_texto(l['Cantidad_disponible'], False)} unidades de este producto vencen {cuando} "
-                               f"({l['Fecha_vencimiento']}). Puedes bajar el precio para venderlas antes.")
-                if sel["Sugerido"] is None:
-                    st.caption(f"Sin ventas en los últimos {DIAS_DEMANDA} días: no hay datos para calcularlo; "
-                               "se mantiene el valor actual.")
-                    valor_min = actual_min
+                if sel is None:
+                    st.caption("Elige un producto para ver y ajustar su stock mínimo y precio de venta.")
                 else:
-                    st.caption(f"Calculado: {int(sel['Vendido'])} unidades vendidas en {DIAS_DEMANDA} días → "
-                               f"{sel['Demanda']:.2f}/día × {sel['Lead_time']} días de lead time = "
-                               f"**{sel['Sugerido']}**")
-                    valor_min = sel["Sugerido"]
-                with st.form(f"form_parametros_{sel['id_inventario']}"):
-                    c1, c2 = st.columns(2)
-                    minimo = c1.number_input("Stock mínimo (calculado, puedes ajustarlo)", min_value=0, step=1,
-                                             value=valor_min)
-                    precio = c2.number_input("Precio de venta ($)", min_value=0.01, step=0.05, format="%.2f",
-                                             value=max(actual_precio, 0.01))
-                    guardar = st.form_submit_button("💾 Guardar")
-                if guardar:
-                    if int(minimo) == actual_min and round(precio, 2) == round(actual_precio, 2):
-                        st.info("No cambiaste ningún valor.")
+                    actual_min, actual_precio = int(sel["Stock_minimo"]), float(sel["Precio_venta"])
+                    st.caption(f"Actual: existencia **{sel['Existencia']}** · stock mínimo **{actual_min}** · "
+                               f"precio **\\${actual_precio:.2f}**")
+                    for l in lotes_por_vencer(id_t, sel["id_producto"]):
+                        cuando = "hoy" if l["Dias_para_vencer"] == 0 else \
+                            f"en {l['Dias_para_vencer']} día" + ("s" if l["Dias_para_vencer"] > 1 else "")
+                        st.warning(f"🟡 {_texto(l['Cantidad_disponible'], False)} unidades de este producto vencen {cuando} "
+                                   f"({l['Fecha_vencimiento']}). Puedes bajar el precio para venderlas antes.")
+                    if sel["Sugerido"] is None:
+                        st.caption(f"Sin ventas en los últimos {DIAS_DEMANDA} días: no hay datos para calcularlo; "
+                                   "se mantiene el valor actual.")
+                        valor_min = actual_min
                     else:
-                        cx = obtener_conexion(); cur = cx.cursor()
-                        cur.execute("UPDATE Inventario SET Stock_minimo=%s, Precio_venta=%s WHERE id_inventario=%s",
-                                    (int(minimo), round(precio, 2), sel["id_inventario"]))
-                        cx.commit(); cur.close(); cx.close()
-                        st.session_state["ok_ajuste"] = (f"✅ {sel['Nombre']}: stock mínimo {actual_min} → {int(minimo)}, "
-                                                         f"precio \\${actual_precio:.2f} → \\${precio:.2f}.")
-                        st.rerun()
+                        st.caption(f"Calculado: {int(sel['Vendido'])} unidades vendidas en {DIAS_DEMANDA} días → "
+                                   f"{sel['Demanda']:.2f}/día × {sel['Lead_time']} días de lead time = "
+                                   f"**{sel['Sugerido']}**")
+                        valor_min = sel["Sugerido"]
+                    with st.form(f"form_parametros_{sel['id_inventario']}"):
+                        c1, c2 = st.columns(2)
+                        minimo = c1.number_input("Stock mínimo (calculado, puedes ajustarlo)", min_value=0, step=1,
+                                                 value=valor_min)
+                        precio = c2.number_input("Precio de venta ($)", min_value=0.01, step=0.05, format="%.2f",
+                                                 value=max(actual_precio, 0.01))
+                        guardar = st.form_submit_button("💾 Guardar")
+                    if guardar:
+                        if int(minimo) == actual_min and round(precio, 2) == round(actual_precio, 2):
+                            st.info("No cambiaste ningún valor.")
+                        else:
+                            cx = obtener_conexion(); cur = cx.cursor()
+                            cur.execute("UPDATE Inventario SET Stock_minimo=%s, Precio_venta=%s WHERE id_inventario=%s",
+                                        (int(minimo), round(precio, 2), sel["id_inventario"]))
+                            cx.commit(); cur.close(); cx.close()
+                            st.session_state["ok_ajuste"] = (f"✅ {sel['Nombre']}: stock mínimo {actual_min} → {int(minimo)}, "
+                                                             f"precio \\${actual_precio:.2f} → \\${precio:.2f}.")
+                            st.rerun()
 
             st.subheader("Bajas de inventario")
             c1, c2 = st.columns(2)
@@ -222,14 +226,23 @@ def mostrar_inventario():
                                                   (id_t,))]
                 if con_stock:
                     with st.form("form_baja"):
-                        sel = st.selectbox("Producto", con_stock, format_func=lambda x: f"{x['Nombre']} (stock {x['Existencia']})")
-                        cant = st.number_input("Cantidad", min_value=1, step=1)
-                        motivo = st.selectbox("Motivo", ["Daño", "Conteo"])
+                        sel = st.selectbox("Producto", con_stock, index=None, placeholder="Selecciona un producto",
+                                           format_func=lambda x: f"{x['Nombre']} (stock {x['Existencia']})")
+                        cant = st.number_input("Cantidad", min_value=1, step=1, value=None)
+                        motivo = st.selectbox("Motivo", ["Daño", "Conteo"], index=None,
+                                              placeholder="Selecciona el motivo")
                         obs = st.text_input("Observación")
                         if st.form_submit_button("Registrar baja"):
-                            try:
-                                baja_manual(id_t, sel["id_producto"], id_usuario, cant, motivo, obs or None)
-                                st.session_state["ok_ajuste"] = f"✅ Baja registrada: {cant} de {sel['Nombre']}."
-                                st.rerun()
-                            except ReglaNegocioError as e:
-                                st.error(f"❌ {e}")
+                            if sel is None:
+                                st.error("⚠️ Selecciona el producto.")
+                            elif not cant:
+                                st.error("⚠️ Escribe la cantidad a dar de baja.")
+                            elif motivo is None:
+                                st.error("⚠️ Selecciona el motivo de la baja.")
+                            else:
+                                try:
+                                    baja_manual(id_t, sel["id_producto"], id_usuario, cant, motivo, obs or None)
+                                    st.session_state["ok_ajuste"] = f"✅ Baja registrada: {cant} de {sel['Nombre']}."
+                                    st.rerun()
+                                except ReglaNegocioError as e:
+                                    st.error(f"❌ {e}")
