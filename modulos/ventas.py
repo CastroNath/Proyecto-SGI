@@ -160,8 +160,7 @@ def mostrar_ventas():
             st.info("📭 No hay ventas en el rango seleccionado.")
         else:
             st.caption(f"{len(ventas)} ventas · \\${sum(float(v['Total']) for v in ventas):,.2f}")
-            tabla(ventas, width="stretch", hide_index=True,
-                         column_config={"Total": st.column_config.NumberColumn(format="dollar")})
+            tabla(ventas, width="stretch", hide_index=True)
             sel = st.selectbox("Ver detalle", ventas, format_func=lambda x: f"Venta #{x['ID']}")
             tabla(consultar("""SELECT p.Nombre AS Producto, dv.Cantidad, dv.Precio_unitario,
                                              dv.Cantidad * dv.Precio_unitario AS Subtotal
