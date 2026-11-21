@@ -114,13 +114,6 @@ def mostrar_compras():
             return
 
         carrito = st.session_state["carrito_compras"]
-        prov_sel = st.selectbox(
-            "Proveedor de la orden", [None] + proveedores, index=0, key=f"prov_{r}",
-            format_func=lambda x: "-- Selecciona un proveedor --" if x is None else
-            (f"🏢 {x['Nombre']} (Centro de Distribución)" if x["id_tienda_cd"] else f"{x['Nombre']} ({x['Tipo']})"),
-            disabled=len(carrito) > 0, help="Para cambiar de proveedor, limpia la orden.")
-        al_cd = bool(prov_sel and prov_sel["id_tienda_cd"])
-
         prod_sel = st.selectbox(
             "Producto del Catálogo", [None] + productos, index=0, key=f"prod_{r}_{len(carrito)}",
             format_func=lambda x: "-- Selecciona un producto --" if x is None else
@@ -129,7 +122,6 @@ def mostrar_compras():
         info_cd = datos_cd_producto(prod_sel["id_producto"]) if prod_sel else None
         if prod_sel:
             comp = obtener_comparativa_producto(prod_sel["id_producto"], es_cd, info_cd)
-            aviso_catalogo(prov_sel, prod_sel, comp, info_cd)
             if comp:
                 with st.expander("📊 Comparativa de precios por proveedor", expanded=True):
                     tabla(comp)
@@ -152,6 +144,16 @@ def mostrar_compras():
                     st.info(f"💡 **Compra a {externo}** (\\${float(mejor_ext):.2f}): "
                             + ("el CD no maneja este producto." if not info_cd["Precio_CD"]
                                else "el Centro de Distribución no es la opción más barata para este producto."))
+
+        prov_sel = st.selectbox(
+            "Proveedor de la orden", [None] + proveedores, index=0, key=f"prov_{r}",
+            format_func=lambda x: "-- Selecciona un proveedor --" if x is None else
+            (f"🏢 {x['Nombre']} (Centro de Distribución)" if x["id_tienda_cd"] else f"{x['Nombre']} ({x['Tipo']})"),
+            disabled=len(carrito) > 0, help="Elige el proveedor después de revisar la comparativa. Para cambiarlo, limpia la orden.")
+        al_cd = bool(prov_sel and prov_sel["id_tienda_cd"])
+
+        if prod_sel:
+            aviso_catalogo(prov_sel, prod_sel, comp, info_cd)
 
         st.divider()
         # Fuera del formulario: así la fecha aparece en cuanto se marca la casilla
