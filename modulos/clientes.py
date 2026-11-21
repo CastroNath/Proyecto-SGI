@@ -45,8 +45,7 @@ def _formulario_cliente(clave, actual=None):
         # Fuera del formulario para que el campo cambie en cuanto se elige el tipo
         doc_actual = actual.get("NIT") or ""
         tipo_doc = st.radio("Documento de identificación *", ["DUI", "NIT"], horizontal=True,
-                            index=0 if len(_solo_digitos(doc_actual)) == 9 else 1, key=f"{clave}_tipo_doc",
-                            help="DUI: 9 dígitos (persona natural, homologado como NIT). NIT: 14 dígitos.")
+                            index=0 if len(_solo_digitos(doc_actual)) == 9 else 1, key=f"{clave}_tipo_doc")
     valores = {"ccf": ccf, "tipo_doc": tipo_doc, "nit": "", "nrc": "", "giro": "", "direccion": "",
                "telefono": "", "correo": ""}
     editar = bool(actual)
