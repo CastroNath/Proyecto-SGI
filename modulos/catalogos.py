@@ -1,0 +1,75 @@
+"""Catálogos de apoyo para formularios.
+
+GIROS: actividades económicas comunes entre los clientes de una tienda minorista
+(descripciones basadas en la Clasificación de Actividades Económicas de El Salvador, CLAEES).
+No incluye códigos: si se requiere el catálogo oficial completo de Hacienda, se puede cargar aquí.
+En el formulario también se puede escribir un giro que no esté en la lista.
+"""
+
+GIROS = sorted([
+    # Comercio
+    "Venta al por menor en tiendas de productos de primera necesidad",
+    "Venta al por menor de abarrotes y misceláneas",
+    "Venta al por menor de frutas y verduras",
+    "Venta al por menor de carnes y productos cárnicos",
+    "Venta al por menor de productos lácteos y huevos",
+    "Venta al por menor de pan y productos de panadería",
+    "Venta al por menor de bebidas",
+    "Venta al por menor de productos de limpieza",
+    "Venta al por menor de artículos de ferretería y materiales de construcción",
+    "Venta al por menor de productos farmacéuticos y medicinales",
+    "Venta al por menor de productos cosméticos y de higiene personal",
+    "Venta al por menor de ropa y calzado",
+    "Venta al por menor de útiles escolares y artículos de librería",
+    "Venta al por menor de productos agropecuarios",
+    "Venta al por menor de artículos para el hogar",
+    "Venta al por menor de teléfonos celulares y accesorios",
+    "Venta al por mayor de alimentos y bebidas",
+    "Venta al por mayor de granos básicos",
+    "Venta al por mayor de productos de limpieza",
+    "Venta al por mayor de materiales de construcción",
+    "Supermercados",
+    "Tiendas de conveniencia",
+    # Alimentos
+    "Restaurantes",
+    "Comedores",
+    "Pupuserías",
+    "Cafeterías",
+    "Venta de comida preparada",
+    "Servicio de catering y banquetes",
+    "Elaboración de productos de panadería",
+    "Elaboración de productos lácteos",
+    "Elaboración de dulces y repostería",
+    "Elaboración de tortillas",
+    # Servicios
+    "Hoteles y hospedajes",
+    "Salones de belleza y barberías",
+    "Lavanderías",
+    "Talleres de reparación de vehículos",
+    "Servicios de transporte de carga",
+    "Servicios de transporte de pasajeros",
+    "Servicios de construcción",
+    "Servicios de limpieza",
+    "Servicios de contabilidad y auditoría",
+    "Servicios jurídicos",
+    "Servicios médicos y clínicas",
+    "Servicios odontológicos",
+    "Servicios veterinarios",
+    "Servicios de educación privada",
+    "Servicios de publicidad",
+    "Servicios de tecnología de información y computadoras",
+    "Servicios de seguridad privada",
+    "Organizaciones sin fines de lucro",
+    "Cooperativas",
+    "Instituciones de gobierno",
+    # Agro e industria
+    "Cultivo de granos básicos",
+    "Cultivo de hortalizas y legumbres",
+    "Cultivo de café",
+    "Cría de aves de corral",
+    "Cría de ganado bovino",
+    "Fabricación de productos de limpieza",
+    "Fabricación de muebles",
+    "Confección de prendas de vestir",
+    "Imprentas y litografías",
+])
