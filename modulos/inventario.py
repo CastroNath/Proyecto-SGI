@@ -76,7 +76,7 @@ def mostrar_inventario():
             df["Estado_stock"] = df["Estado_stock"].map(
                 {"OK": "🟢 Suficiente", "Reponer": "🟡 Reponer", "Agotado": "🔴 Agotado"}).fillna(df["Estado_stock"])
             tabla(df, width="stretch", hide_index=True,
-                         column_config={"Precio_venta": st.column_config.NumberColumn("Precio Venta ($)", format="$%.2f")})
+                         column_config={"Precio_venta": st.column_config.NumberColumn("Precio Venta ($)", format="dollar")})
 
     with t_venc:
         id_t = selector_tienda("venc_t")
