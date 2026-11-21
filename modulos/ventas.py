@@ -65,7 +65,8 @@ def mostrar_ventas():
                                    disabled=len(carrito) > 0)
                 id_cliente = sel["id_cliente"] if sel else None
                 if sel and sel["NRC"]:
-                    st.caption(f"🧾 Comprobante de Crédito Fiscal · NIT {sel['NIT']} · NRC {sel['NRC']}")
+                    tipo_doc = "DUI" if len(sel["NIT"] or "") == 10 else "NIT"
+                    st.caption(f"🧾 Comprobante de Crédito Fiscal · {tipo_doc} {sel['NIT']} · NRC {sel['NRC']}")
                 if not clientes:
                     st.caption("No tienes clientes de crédito fiscal registrados; regístralos en Catálogos y Registros → Clientes.")
             else:
