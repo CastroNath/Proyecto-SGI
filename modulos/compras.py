@@ -50,6 +50,14 @@ def demanda_real(id_tienda, id_producto):
     return float(r["q"]) / DIAS_DEMANDA if r else 0.0
 
 
+def sin_vencimiento(filas):
+    """Muestra 'Sin vencimiento' en lugar de None para productos que no vencen."""
+    for f in filas:
+        if "Fecha_vencimiento" in f and f["Fecha_vencimiento"] is None:
+            f["Fecha_vencimiento"] = "Sin vencimiento"
+    return filas
+
+
 def aviso_catalogo(prov_sel, prod_sel, comp, info_cd):
     """Avisa si el proveedor elegido no tiene el producto en su catálogo y dice quién sí lo tiene."""
     if not (prov_sel and prod_sel):
@@ -294,13 +302,15 @@ def mostrar_compras():
                 st.info("✅ No tienes despachos pendientes del Centro de Distribución.")
             else:
                 tabla(despachos, width="stretch", hide_index=True)
-                sel = st.selectbox("Despacho recibido", despachos,
+                sel = st.selectbox("Despacho recibido", despachos, index=None,
+                                   placeholder="Selecciona el despacho que recibiste",
                                    format_func=lambda x: f"Despacho CD #{x['id_venta']} - ${float(x['Total']):.2f}")
-                tabla(consultar("""SELECT p.Nombre AS Producto, dv.Cantidad, dv.Precio_unitario,
+                if sel is not None:
+                    tabla(sin_vencimiento(consultar("""SELECT p.Nombre AS Producto, dv.Cantidad, dv.Precio_unitario,
                                                  dv.Fecha_vencimiento FROM Detalle_venta dv
                                           JOIN Producto p ON p.id_producto = dv.id_producto WHERE dv.id_venta=%s""",
-                                       (sel["id_venta"],)), width="stretch", hide_index=True)
-                if st.button("✅ Confirmar recepción y registrar mi compra", key="btn_rec_cd"):
+                                       (sel["id_venta"],))), width="stretch", hide_index=True)
+                if sel is not None and st.button("✅ Confirmar recepción y registrar mi compra", key="btn_rec_cd"):
                     try:
                         idc = confirmar_despacho_cd(sel["id_venta"], id_tienda, id_usuario)
                         st.session_state["msg_recepcion"] = (f"✅ Despacho #{sel['id_venta']} recibido. "
@@ -313,7 +323,7 @@ def mostrar_compras():
         st.subheader("🚚 Órdenes a proveedores externos en camino")
         ordenes = consultar("""SELECT c.id_compra, p.Nombre AS Proveedor, c.Fecha AS Fecha_pedido,
                                       c.Fecha_entrega_estimada AS Entrega_estimada, c.Total,
-                                      IF(c.Fecha_entrega_estimada < NOW(), '⚠️ Atrasada', 'A tiempo') AS Situación
+                                      IF(c.Fecha_entrega_estimada < NOW(), '🔴 Atrasada', '🟢 Dentro del plazo') AS Situación
                                FROM Compra c JOIN Proveedor p ON p.id_proveedor = c.id_proveedor
                                WHERE c.id_tienda = %s AND c.Estado = 'En tránsito'
                                ORDER BY c.Fecha_entrega_estimada""", (id_tienda,))
@@ -321,25 +331,28 @@ def mostrar_compras():
             st.info("✅ No hay órdenes en tránsito de proveedores externos.")
         else:
             tabla(ordenes, width="stretch", hide_index=True)
-            sel = st.selectbox("Orden", ordenes,
+            st.caption("🟢 **Dentro del plazo**: todavía no pasa la fecha de entrega estimada. "
+                       "🔴 **Atrasada**: ya pasó esa fecha y el pedido no ha llegado.")
+            sel = st.selectbox("Orden", ordenes, index=None, placeholder="Selecciona la orden",
                                format_func=lambda x: f"Orden #{x['id_compra']} - {x['Proveedor']} (${float(x['Total']):.2f})")
-            c1, c2 = st.columns(2)
-            with c1:
-                if st.button("✅ Marcar como recibida e ingresar al stock", key="btn_rec_prov"):
-                    try:
-                        recibir_compra(sel["id_compra"], id_tienda)
-                        st.session_state["msg_recepcion"] = f"✅ Orden #{sel['id_compra']} recibida e ingresada."
-                        st.rerun()
-                    except ReglaNegocioError as e:
-                        st.error(f"❌ {e}")
-            with c2:
-                if st.button("🚫 Anular orden", key="btn_anular"):
-                    try:
-                        anular_compra(sel["id_compra"], id_tienda)
-                        st.session_state["msg_recepcion"] = f"Orden #{sel['id_compra']} anulada."
-                        st.rerun()
-                    except ReglaNegocioError as e:
-                        st.error(f"❌ {e}")
+            if sel is not None:
+                c1, c2 = st.columns(2)
+                with c1:
+                    if st.button("✅ Marcar como recibida e ingresar al stock", key="btn_rec_prov"):
+                        try:
+                            recibir_compra(sel["id_compra"], id_tienda)
+                            st.session_state["msg_recepcion"] = f"✅ Orden #{sel['id_compra']} recibida e ingresada."
+                            st.rerun()
+                        except ReglaNegocioError as e:
+                            st.error(f"❌ {e}")
+                with c2:
+                    if st.button("🚫 Anular orden", key="btn_anular"):
+                        try:
+                            anular_compra(sel["id_compra"], id_tienda)
+                            st.session_state["msg_recepcion"] = f"Orden #{sel['id_compra']} anulada."
+                            st.rerun()
+                        except ReglaNegocioError as e:
+                            st.error(f"❌ {e}")
 
     # =====================================================================
     # HISTORIAL
@@ -349,11 +362,18 @@ def mostrar_compras():
                                    c.id_venta_origen AS Despacho_CD
                             FROM Compra c JOIN Proveedor p ON p.id_proveedor = c.id_proveedor
                             WHERE c.id_tienda = %s ORDER BY c.Fecha DESC LIMIT 200""", (id_tienda,))
+        for h in hist:
+            if h["Fecha_recepcion"] is None:
+                h["Fecha_recepcion"] = "Pendiente"
+            if h["Despacho_CD"] is None:
+                h["Despacho_CD"] = ""
         tabla(hist, width="stretch", hide_index=True)
         if hist:
-            sel = st.selectbox("Ver detalle de la compra", hist, format_func=lambda x: f"Compra #{x['id_compra']}")
-            tabla(consultar("""SELECT p.Nombre AS Producto, dc.Cantidad, dc.Precio_compra,
-                                             dc.Precio_venta_sugerido, dc.Fecha_vencimiento
-                                      FROM Detalle_compra dc LEFT JOIN Producto p ON p.id_producto = dc.id_producto
-                                      WHERE dc.id_compra = %s""", (sel["id_compra"],)),
-                         width="stretch", hide_index=True)
+            sel = st.selectbox("Ver detalle de la compra", hist, index=None, placeholder="Selecciona una compra",
+                               format_func=lambda x: f"Compra #{x['id_compra']} - {x['Proveedor']}")
+            if sel is not None:
+                tabla(sin_vencimiento(consultar("""SELECT p.Nombre AS Producto, dc.Cantidad, dc.Precio_compra,
+                                                       dc.Precio_venta_sugerido, dc.Fecha_vencimiento
+                                                FROM Detalle_compra dc
+                                                LEFT JOIN Producto p ON p.id_producto = dc.id_producto
+                                                WHERE dc.id_compra = %s""", (sel["id_compra"],))))
