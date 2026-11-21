@@ -184,12 +184,20 @@ def mostrar_registro():
                 nombre = st.text_input("Nombre Completo del Empleado")
                 usuario = st.text_input("Nombre de Usuario")
                 contrasena = st.text_input("Contraseña (mínimo 4 caracteres)", type="password")
-                rol_sel = st.selectbox("Asignar Rol", roles, format_func=lambda x: x["Nombre"])
-                tienda_sel = st.selectbox("Asignar Tienda / Sucursal", tiendas, format_func=lambda x: x["Nombre"])
+                rol_sel = st.selectbox("Asignar Rol", roles, index=None,
+                                       placeholder="Selecciona un rol",
+                                       format_func=lambda x: x["Nombre"])
+                tienda_sel = st.selectbox("Asignar Tienda / Sucursal", tiendas, index=None,
+                                          placeholder="Selecciona una tienda",
+                                          format_func=lambda x: x["Nombre"])
                 guardar = st.form_submit_button("Guardar Usuario")
             if guardar:
                 if not nombre.strip() or not usuario.strip() or not contrasena.strip():
                     st.error("⚠️ Por favor, llena todos los campos.")
+                elif rol_sel is None:
+                    st.error("⚠️ Selecciona el rol del usuario.")
+                elif tienda_sel is None:
+                    st.error("⚠️ Selecciona la tienda a la que pertenece el usuario.")
                 elif len(contrasena) < 4:
                     st.error("⚠️ La contraseña debe tener al menos 4 caracteres.")
                 else:
